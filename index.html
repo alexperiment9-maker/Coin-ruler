@@ -99,7 +99,9 @@ summary small{color:var(--muted);font-weight:400}
 .empty[hidden]{display:none}
 .headrow{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px}
 .acc{font-size:12px;color:var(--muted);text-align:right}
-.persp{display:flex;flex-direction:column;gap:10px}
+.persp{display:block}
+.persp[open]>*:not(summary){margin-top:10px}
+.persp>summary{border:0}
 .pstate{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center}
 .tiltnum{font-family:var(--display);font-weight:700;font-size:44px;line-height:.9;font-variant-numeric:tabular-nums}
 .tiltnum small{display:block;font-family:var(--body);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-top:4px}
@@ -203,23 +205,22 @@ ol.tips{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:13px;displ
   <p id="status" role="status"></p>
 
   <div class="tools" id="coinTools" hidden>
-    <p class="hint">Make the gold oval sit exactly on the coin's outer edge. Drag inside it to move. Round handle: length and turn. Diamond handle: width. Pinch to zoom.</p>
-    <div class="row">
+    <p class="hint">Tap the coin. A gold oval hugs its edge. If it's off, tap the coin again or drag the oval's handles.</p>
+    <div class="row" hidden>
       <button type="button" id="btnFind">Find coin again</button>
       <button type="button" id="btnSnap">Snap to edge</button>
       <button type="button" id="btnSm">Smaller</button>
       <button type="button" id="btnBg">Bigger</button>
     </div>
-    <button type="button" class="primary" id="btnOk">Oval fits the coin. Start measuring</button>
+    <button type="button" class="primary" id="btnOk" disabled>Looks right. Start measuring</button>
   </div>
 
   <div class="tools" id="measTools" hidden>
     <div class="row">
       <button type="button" class="primary" id="btnAdd">Add line</button>
       <button type="button" class="primary" id="btnAddH">Add height</button>
-      <button type="button" id="btnCoin">Adjust coin</button>
+      <button type="button" id="btnCoin">Fix coin</button>
     </div>
-    <button type="button" class="small toggle" id="btnSnap2" aria-pressed="true">Snap line ends to edges</button>
     <div class="row">
       <button type="button" id="btnSave">Save photo with sizes</button>
       <button type="button" id="btnKeep">Keep in history</button>
@@ -232,8 +233,8 @@ ol.tips{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:13px;displ
     <p class="empty" id="mempty" hidden>No lines yet. Tap Add line, then drag each end onto the thing you want to measure.</p>
   </section>
 
-  <section class="card persp" aria-label="Perspective">
-    <div class="headrow" style="margin:0"><h2>Perspective</h2><span class="pill good" id="tiltPill">Straight-on</span></div>
+  <details class="card persp" aria-label="Settings" style="padding:12px">
+    <summary style="padding:0;align-items:center"><h2>Settings</h2><span class="pill good" id="tiltPill">Straight-on</span></summary>
     <div class="pstate">
       <div class="tiltnum" id="tiltDeg">0°<small>tilt</small></div>
       <div class="ptxt">
@@ -252,8 +253,9 @@ ol.tips{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:13px;displ
       </select>
     </div>
     <button type="button" class="small toggle" id="btnGrid" aria-pressed="false">Show 1 cm floor grid</button>
-    <p class="hint">The coin's oval shape tells the app how the camera was tilted. Every line is corrected for it. If the grid doesn't line up with the table, tap Flip tilt direction.</p>
-  </section>
+    <button type="button" class="small toggle" id="btnSnap2" aria-pressed="true">Snap line ends to edges</button>
+    <p class="hint">The coin's oval shape tells the app how the phone was tilted, and every line is corrected for it. If the grid doesn't line up with the table, tap Flip tilt direction.</p>
+  </details>
 
   <section class="card" id="preview" hidden aria-label="Saved picture">
     <h2>Your picture</h2>
@@ -265,11 +267,9 @@ ol.tips{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:13px;displ
   <section class="card" aria-label="How to get accurate sizes">
     <h2>For accurate sizes</h2>
     <ol class="tips">
-      <li>Coin and object must lie flat on the same surface. Tilted photos are fine now.</li>
-      <li>For things that stand up (box, cup, bottle) use Add height. Put the square exactly where the object touches the table, then drag the top. Heights need a tilted photo (20–50° is best).</li>
-      <li>Use the original photo. Cropping or screenshots remove the lens info.</li>
-      <li>Fill the frame. A bigger coin in the photo gives a better reading.</li>
-      <li>Under about 45° of tilt is best. Steeper still works but the ± grows.</li>
+      <li>Lay the coin flat on the same surface as the thing you measure.</li>
+      <li>Use the phone's normal camera, in good light. Angled shots are fine.</li>
+      <li>For things standing up, use Add height and put the square where it touches the table.</li>
     </ol>
   </section>
 
@@ -280,17 +280,7 @@ ol.tips{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:13px;displ
   </section>
 </div>
 <div id="toast" role="status" hidden></div>
-<div id="live" hidden role="dialog" aria-label="Live camera">
-  <video id="liveVid" playsinline muted autoplay></video>
-  <canvas id="liveCv" aria-hidden="true"></canvas>
-  <div class="ltop"><div id="liveMsg" role="status">Starting camera…</div><div id="liveTilt"></div></div>
-  <p class="lhelp" id="liveHelp">Put a coin flat next to the object. Any angle up to about 55° works.</p>
-  <div class="lbot">
-    <button type="button" class="lbtn" id="liveClose">Close</button>
-    <button type="button" class="shutter" id="liveShot" aria-label="Take photo now"><span></span></button>
-    <button type="button" class="lbtn" id="liveAuto" aria-pressed="true">Auto shot</button>
-  </div>
-</div>
+
 
 <script>
 "use strict";
@@ -484,7 +474,7 @@ var view={z:1,px:0,py:0}, G={cw:300,ch:200,fit:1,dpr:1};
 var loupe=null;
 var lens={mm:26,from:"default",exif:null};
 var pose={sols:[],def:0,flip:false}, alt=null, altTimer=0;
-var showGrid=false;
+var showGrid=false, coinSet=true;
 
 function lensMM(){return lens.mm;}
 function focalPx(){return lensMM()*Math.hypot(src.width,src.height)/43.267;}
@@ -624,6 +614,7 @@ function render(c,s,ox,oy,u,W,H,o){
   if(o.grid) drawGrid(c,s,ox,oy,u);
   var gold="#FFC94A";
   var cx=ox+coin.x*s,cy=oy+coin.y*s,ca=Math.cos(coin.t),sa=Math.sin(coin.t);
+  if(!coinSet) return;
   c.beginPath(); c.ellipse(cx,cy,Math.max(1,coin.a*s),Math.max(1,coin.b*s),coin.t,0,Math.PI*2);
   if(o.coinActive){strokeBoth(c,gold,1.6,u);} else {c.setLineDash([6*u,5*u]); strokeBoth(c,gold,1.5,u); c.setLineDash([]);}
   if(o.coinActive){
@@ -665,7 +656,7 @@ function draw(){
   if(!src) return;
   var d=G.dpr||1; ctx.setTransform(d,0,0,d,0,0);
   ctx.fillStyle="#0A1014"; ctx.fillRect(0,0,G.cw,G.ch);
-  render(ctx,S(),view.px,view.py,1,G.cw,G.ch,{coinActive:step==="coin",lines:step==="measure",handles:true,grid:showGrid||step==="coin"});
+  render(ctx,S(),view.px,view.py,1,G.cw,G.ch,{coinActive:step==="coin",lines:step==="measure",handles:true,grid:showGrid});
   if(loupe) drawLoupe();
 }
 function drawLoupe(){
@@ -698,16 +689,16 @@ function hit(p){
       if(db<bd){bd=db;best={k:"end",i:i,w:2,dx:b[0]-p[0],dy:b[1]-p[1]};}
     }
     if(best){sel=best.i;return best;}
-  }else{
+  }else if(coinSet){
     var c=toScr(coin.x,coin.y),ca=Math.cos(coin.t),sa=Math.sin(coin.t);
     var ax=c[0]+ca*coin.a*s,ay=c[1]+sa*coin.a*s,bx=c[0]-sa*coin.b*s,by=c[1]+ca*coin.b*s;
     if(Math.hypot(p[0]-ax,p[1]-ay)<28) return {k:"ha"};
     if(Math.hypot(p[0]-bx,p[1]-by)<28) return {k:"hb"};
     var q=toImg(p[0],p[1]),rho=ellRho(coin,q[0],q[1]);
     if(Math.abs(rho-1)*coin.b*s<14) return {k:"rim",rho0:rho,a0:coin.a,b0:coin.b};
-    if(rho<1||Math.hypot(p[0]-c[0],p[1]-c[1])<30) return {k:"coin",dx:c[0]-p[0],dy:c[1]-p[1]};
+    if(rho<1||Math.hypot(p[0]-c[0],p[1]-c[1])<30) return {k:"coin",dx:c[0]-p[0],dy:c[1]-p[1],sx:p[0],sy:p[1],moved:0};
   }
-  return {k:"pan",sx:p[0],sy:p[1],px:view.px,py:view.py};
+  return {k:"pan",sx:p[0],sy:p[1],px:view.px,py:view.py,moved:0};
 }
 function coinChanged(){
   if(poseRaf) return;
@@ -742,9 +733,11 @@ function applyDrag(p){
     coin.a=Math.max(3,drag.a0*k); coin.b=Math.max(3,drag.b0*k); coin.rms=1;
     loupe={x:q[0],y:q[1]}; coinChanged();
   }else if(drag.k==="coin"){
+    drag.moved=Math.max(drag.moved,Math.hypot(p[0]-drag.sx,p[1]-drag.sy)); if(drag.moved<8) return;
     q=toImg(p[0]+drag.dx,p[1]+drag.dy); coin.x=q[0]; coin.y=q[1];
     loupe={x:coin.x+Math.cos(coin.t)*coin.a,y:coin.y+Math.sin(coin.t)*coin.a}; coinChanged();
   }else if(drag.k==="pan"){
+    drag.moved=Math.max(drag.moved,Math.hypot(p[0]-drag.sx,p[1]-drag.sy));
     view.px=drag.px+p[0]-drag.sx; view.py=drag.py+p[1]-drag.sy; clampView();
   }
 }
@@ -771,7 +764,9 @@ cv.addEventListener("pointermove",function(e){
 });
 function endPtr(e){
   var wasCoin=drag&&/^(ha|hb|rim|coin)$/.test(drag.k);
+  if(drag&&drag.k==="coin"&&drag.moved<8&&ptrs.size===1&&!pinch){var tq=toImg(drag.sx,drag.sy); drag=null; ptrs.delete(e.pointerId); loupe=null; tapCoin(tq[0],tq[1]); return;}
   if(drag&&drag.k==="end"&&snapOn&&ptrs.size===1) snapEnd(drag.i,drag.w);
+  if(drag&&drag.k==="pan"&&step==="coin"&&ptrs.size===1&&!pinch&&drag.moved<8){var tp=toImg(drag.sx,drag.sy); drag=null; ptrs.delete(e.pointerId); tapCoin(tp[0],tp[1]); return;}
   ptrs.delete(e.pointerId); if(ptrs.size<2) pinch=null;
   if(ptrs.size===0){drag=null;loupe=null; if(wasCoin) updatePose(true); refreshList();}
   draw();
@@ -796,7 +791,7 @@ function blur3(g,w,h){
   }
   return o;
 }
-function detectCoin(){
+function detectCoin(tap){
   var k=Math.min(1,320/Math.max(src.width,src.height));
   var w=Math.max(8,Math.round(src.width*k)),h=Math.max(8,Math.round(src.height*k)),wh=w*h;
   var c=document.createElement("canvas"); c.width=w; c.height=h;
@@ -832,18 +827,31 @@ function detectCoin(){
   }
   var best=0,bx=0,by=0,bri=0;
   for(var ri2=0;ri2<nr;ri2++){
-    var rad2=rmin+ri2,lo=rad2*0.9,base2=ri2*wh;
+    var rad2=rmin+ri2,lo=rad2*(tap?0.6:0.9),base2=ri2*wh;
     for(y=1;y<h-1;y++) for(x=1;x<w-1;x++){
       if(acc[base2+y*w+x]<lo) continue;
+      if(tap){var tdx=x-tap[0]*k,tdy=y-tap[1]*k; if(tdx*tdx+tdy*tdy>rad2*rad2*1.2) continue;}
       var v=sc(ri2,x,y); if(v>best){best=v;bx=x;by=y;bri=ri2;}
     }
   }
-  if(best<3.6) return null;
-  var lim=Math.min(nr-1,Math.round((rmin+bri)*1.7)-rmin);
+  if(best<(tap?2.2:3.6)) return null;
+  /* tapped: the coin is the biggest strong circle around the tap (skips the inner disc and engravings) */
+  if(tap){
+    for(var r4=nr-1;r4>bri;r4--){
+      var rad4=rmin+r4,bb4=0,o4x=0,o4y=0,base4=r4*wh;
+      for(y=1;y<h-1;y++) for(x=1;x<w-1;x++){
+        if(acc[base4+y*w+x]<rad4*0.6) continue;
+        var t4x=x-tap[0]*k,t4y=y-tap[1]*k; if(t4x*t4x+t4y*t4y>rad4*rad4*1.1) continue;
+        var v4=sc(r4,x,y); if(v4>bb4){bb4=v4;o4x=x;o4y=y;}
+      }
+      if(bb4>=best*0.5){bx=o4x;by=o4y;bri=r4;best=bb4;break;}
+    }
+  }
+  var lim=Math.min(nr-1,Math.round((rmin+bri)*2.0)-rmin);
   for(var r3=lim;r3>bri+1;r3--){
     var bb=0,ox=0,oy=0;
     for(var yy=-2;yy<=2;yy++) for(var xx=-2;xx<=2;xx++){var t=sc(r3,bx+xx,by+yy); if(t>bb){bb=t;ox=bx+xx;oy=by+yy;}}
-    if(bb>=best*0.62){bx=ox;by=oy;bri=r3;break;}
+    if(bb>=best*(tap?0.45:0.62)){bx=ox;by=oy;bri=r3;break;}
   }
   return {x:(bx+0.5)/k,y:(by+0.5)/k,r:(rmin+bri)/k};
 }
@@ -899,7 +907,7 @@ function refineEllipse(e,lo,hi,mode){
 }
 /* Robust oval search: random 5-point ovals checked against edge pixels (position and direction). */
 function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;var t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
-function ransacEllipse(d,iters){
+function ransacEllipse(d,iters,tapMode){
   var R0=3.1*d.r, k=Math.min(2,150/R0), N=Math.ceil(2*R0*k), half=N/2;
   var c=document.createElement("canvas"); c.width=N; c.height=N;
   var x2=c.getContext("2d",{willReadFrequently:true}); x2.fillStyle="#808080"; x2.fillRect(0,0,N,N);
@@ -918,10 +926,13 @@ function ransacEllipse(d,iters){
     i=y*N+x; var m=mg[i]; if(m<thr) continue;
     var ux=gx[i]/m, uy=gy[i]/m, sx=Math.round(ux), sy=Math.round(uy);
     if(m<mg[i+sy*N+sx]||m<mg[i-sy*N-sx]) continue;
-    pts.push([(x-half)/half,(y-half)/half,ux,uy]);
+    var px0=(x-half)/half,py0=(y-half)/half;
+    /* tapped inside the coin: its rim faces roughly toward the tap point */
+    if(tapMode){var pn=Math.hypot(px0,py0); if(pn<1e-6||Math.abs(px0*ux+py0*uy)/pn<0.6) continue;}
+    pts.push([px0,py0,ux,uy]);
   }
   if(pts.length<40) return null;
-  var rnd=rng(1234567);
+  var rnd=rng(1234567), total=pts.length;
   if(pts.length>1600){for(i=pts.length-1;i>0;i--){var j=Math.floor(rnd()*(i+1)),tm=pts[i];pts[i]=pts[j];pts[j]=tm;} pts.length=1600;}
   var n=pts.length, rs=d.r*k/half, tol=1.3/half, best=null, cands=[];
   function score(e){
@@ -942,9 +953,10 @@ function ransacEllipse(d,iters){
     var e=ellipseFit(sel5.map(function(q){return [pts[q][0],pts[q][1]];}));
     if(!e) continue; e=normEll(e);
     if(e.b/e.a<0.2||e.a>3*rs||e.b<0.35*rs||Math.hypot(e.x,e.y)>1.6*rs) continue;
+    if(tapMode&&ellRho(e,0,0)>1.05) continue;
     var sc=score(e); if(sc.bins<12) continue;
     var val=sc.cnt/Math.sqrt(e.a*e.b);
-    if(sc.cnt<0.5*Math.PI*(e.a+e.b)*half*0.35) continue;
+    if(sc.cnt*total/n<0.5*Math.PI*(e.a+e.b)*half*0.35) continue;
     e.cnt=sc.cnt; e.val=val; cands.push(e);
     if(!best||sc.cnt>best.cnt) best=e;
   }
@@ -956,7 +968,9 @@ function ransacEllipse(d,iters){
     if(inl.length<20) break;
     var f=ellipseFit(inl); if(!f) break; f=normEll(f); f.cnt=best.cnt; best=f;
   }
-  return normEll({x:d.x+best.x*half/k,y:d.y+best.y*half/k,a:best.a*half/k,b:best.b*half/k,t:best.t,rms:1});
+  var outE=normEll({x:d.x+best.x*half/k,y:d.y+best.y*half/k,a:best.a*half/k,b:best.b*half/k,t:best.t,rms:1});
+  outE.frac=best.cnt*total/n/(0.5*Math.PI*(best.a+best.b)*half);
+  return outE;
 }
 /* Fit the coin from a rough circle. Two-metal coins (₹10, ₹20, €1, €2) have an inner ring:
    after fitting whatever edge was found, look outward for a matching outer ring and use it. */
@@ -970,6 +984,10 @@ function fitCoin(d){
     if(!e) return null;
     steps=[[0.75,1.33,"near"],[0.82,1.2,"near"],[0.88,1.14,"near"],[0.9,1.1]];
   }
+  return polishCoin(e,steps);
+}
+function polishCoin(e,steps){
+  steps=steps||[[0.9,1.1],[0.94,1.06]];
   for(var si=0;si<steps.length;si++){var e2=refineEllipse(e,steps[si][0],steps[si][1],steps[si][2]); if(e2) e=e2;}
   for(var pass=0;pass<2;pass++){
     var o=null; try{o=refineEllipse(e,1.1,2.0);}catch(err){o=null;}
@@ -981,6 +999,42 @@ function fitCoin(d){
     var o2=refineEllipse(o,0.9,1.1); if(o2){var o3=refineEllipse(o2,0.94,1.06); if(o3) o2=o3;} e=o2||o;
   }
   return e;
+}
+function findCoinAt(x,y){
+  /* try a few coin sizes around the tap; keep ovals that contain the tap */
+  var M=Math.max(src.width,src.height),cands=[];
+  [0.02,0.04,0.08,0.16].forEach(function(f){
+    var e=null; try{e=ransacEllipse({x:x,y:y,r:M*f},3000,true);}catch(err){e=null;}
+    if(e&&ellRho(e,x,y)<=1.1) cands.push(e);
+  });
+  if(!cands.length) return null;
+  /* polish every candidate; keep clean fits, prefer the biggest (outer rim of two-metal coins) */
+  var good=[];
+  cands.forEach(function(e){
+    var p=null; try{p=polishCoin(e,[[0.8,1.25,"near"],[0.88,1.14,"near"],[0.9,1.1],[0.94,1.06]]);}catch(err){p=null;}
+    if(p&&ellRho(p,x,y)<=1.1){p.q=(p.rms||9)/Math.sqrt(p.a*p.b); good.push(p);}
+  });
+  if(!good.length) return cands[0];
+  var clean=good.filter(function(p){return p.q<0.012;});
+  var list=clean.length?clean:good, pick=list[0];
+  list.forEach(function(p){ if(clean.length? p.a*p.b>pick.a*pick.b*1.1 : p.q<pick.q) pick=p; });
+  return pick;
+}
+function tapCoin(x,y){
+  setStatus("Finding the coin…");
+  setTimeout(function(){
+    var e=findCoinAt(x,y);
+    if(e){
+      coin=e; coinSet=true;
+      setStatus(coin.rms>1.6?"Found it, but the edge is unclear. Zoom in and check the oval sits on the coin's outer edge.":"Got it. Check the oval sits on the coin's edge, then tap Looks right.");
+    }else{
+      var r0=Math.max(src.width,src.height)*0.04;
+      coin={x:x,y:y,a:r0,b:r0,t:0,rms:1.5}; coinSet=true;
+      setStatus("Couldn't find the coin's edge there. Drag the oval and its handles onto the coin, or zoom in and tap its centre.");
+    }
+    $("btnOk").disabled=false;
+    updatePose(true); draw(); refreshList();
+  },20);
 }
 function findCoin(){
   setStatus("Looking for the coin…");
@@ -1100,7 +1154,7 @@ function snapEnd(i,w){
 function showSnap(){var b=$("btnSnap2");b.setAttribute("aria-pressed",String(snapOn));b.textContent="Snap line ends to edges: "+(snapOn?"On":"Off");}
 showSnap();
 $("btnSnap2").onclick=function(){snapOn=!snapOn;store.set("cr.snap",snapOn);showSnap();};
-$("btnCoin").onclick=function(){setStep("coin");setStatus("Adjust the gold oval, then start measuring again.");};
+$("btnCoin").onclick=function(){setStep("coin");setStatus("Tap the coin again, or drag the oval's handles. Then tap Looks right.");};
 $("btnOk").onclick=function(){setStep("measure"); if(!lines.length) $("btnAdd").onclick(); else setStatus("");};
 $("btnFind").onclick=findCoin;
 $("btnSnap").onclick=function(){
@@ -1193,8 +1247,9 @@ function loadImage(file,exifMM,opt){
     src=c; lines=[]; sel=-1; view={z:1,px:0,py:0}; pose.flip=false;
     lens.exif=exifMM; lens.from=exifMM?"photo":(opt&&opt.live?"live":"default"); lens.mm=exifMM||26; $("lensSel").value="auto";
     $("exBadge").hidden=true; $("preview").hidden=true;
-    layout(); setStep("coin"); findCoin();
-    if(!exifMM&&!(opt&&opt.live)) toast("No lens info in this photo, so assuming the main camera. Change it under Perspective if needed.");
+    coinSet=false; $("btnOk").disabled=true;
+    layout(); setStep("coin"); setStatus("Tap the coin in the photo.");
+    if(!exifMM&&!(opt&&opt.live)) toast("No lens info in this photo, so assuming the main camera. Change it under Settings if needed.");
   };
   im.onerror=function(){URL.revokeObjectURL(url);toast("That file didn't open as a picture. Try another photo.");};
   im.src=url;
@@ -1206,104 +1261,7 @@ function usePhoto(file,opt){
   p.then(function(buf){var m=null;try{m=exifF35(buf);}catch(e){m=null;}return (m>=8&&m<=400)?m:null;},function(){return null;})
    .then(function(mm){loadImage(file,mm,opt);});
 }
-/* ---------- live camera with auto shot ---------- */
-var live={on:false,stream:null,track:null,timer:0,raf:0,det:null,hist:[],steady:0,auto:store.get("cr.auto",true),busy:false,denied:false};
-var liveCanvas=document.createElement("canvas");
-function liveSupported(){return !live.denied&&!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)&&window.isSecureContext!==false;}
-function openLive(){
-  $("live").hidden=false; document.body.style.overflow="hidden";
-  $("liveMsg").textContent="Starting camera…"; $("liveTilt").textContent=""; live.busy=false;
-  $("liveAuto").setAttribute("aria-pressed",String(live.auto));
-  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:3840},height:{ideal:2160}},audio:false})
-    .then(function(st){live.stream=st; live.track=st.getVideoTracks()[0]; var v=$("liveVid"); v.srcObject=st; return v.play();})
-    .then(function(){live.on=true; live.hist=[]; live.steady=0; live.det=null; liveLoop(); liveDraw();})
-    .catch(function(){closeLive(); live.denied=true; toast("Live camera isn't available here. Tap Take photo again to use your camera app.");});
-}
-function closeLive(){
-  live.on=false; clearTimeout(live.timer); cancelAnimationFrame(live.raf);
-  if(live.stream) live.stream.getTracks().forEach(function(t){t.stop();});
-  live.stream=null; live.track=null; $("liveVid").srcObject=null;
-  $("live").hidden=true; document.body.style.overflow="";
-}
-function liveLoop(){
-  if(!live.on) return;
-  var v=$("liveVid"),vw=v.videoWidth,vh=v.videoHeight,r=null;
-  if(vw&&vh&&!live.busy){
-    var k=480/Math.max(vw,vh); liveCanvas.width=Math.round(vw*k); liveCanvas.height=Math.round(vh*k);
-    liveCanvas.getContext("2d",{willReadFrequently:true}).drawImage(v,0,0,liveCanvas.width,liveCanvas.height);
-    var keep=src; src=liveCanvas;
-    try{
-      var d=detectCoin();
-      if(d){
-        var e=ransacEllipse(d,700);
-        if(e){
-          var e2=refineEllipse(e,0.9,1.1); if(e2) e=e2;
-          var f=26*1.25*Math.max(liveCanvas.width,liveCanvas.height)/43.267, sols=solvePose(e,f);
-          r={e:e,tilt:sols.length?sols[0].th/DEG:0,w:liveCanvas.width,h:liveCanvas.height};
-        }
-      }
-    }catch(err){r=null;}
-    src=keep;
-    live.det=r; liveJudge(r);
-  }
-  live.timer=setTimeout(liveLoop,180);
-}
-function liveJudge(r){
-  var msg,ready=false;
-  if(!r){live.hist=[]; msg="Looking for the coin…";}
-  else{
-    var sz=Math.sqrt(r.e.a*r.e.b)/Math.max(r.w,r.h);
-    live.hist.push(r); if(live.hist.length>4) live.hist.shift();
-    if(sz<0.035) msg="Move closer to the coin";
-    else if(r.tilt>58) msg="Too steep. Hold the phone more above";
-    else{
-      var st=live.hist.length>=3&&live.hist.every(function(q){return Math.hypot(q.e.x-r.e.x,q.e.y-r.e.y)<0.05*r.e.a&&Math.abs(q.e.a-r.e.a)<0.04*r.e.a;});
-      if(st){ready=true; msg=live.auto?"Hold steady…":"Ready. Tap the button";}
-      else msg="Hold steady";
-    }
-  }
-  live.steady=ready?live.steady+1:0;
-  $("liveMsg").textContent=msg;
-  $("liveTilt").textContent=r?"Tilt "+Math.round(r.tilt)+"°":"";
-  $("liveShot").style.setProperty("--p",live.auto?Math.min(1,live.steady/4):(ready?1:0));
-  if(live.auto&&live.steady>=4) liveCapture();
-}
-function liveDraw(){
-  if(!live.on) return;
-  var c=$("liveCv"),v=$("liveVid"),W=c.clientWidth,H=c.clientHeight,d=Math.min(window.devicePixelRatio||1,2);
-  if(c.width!==Math.round(W*d)||c.height!==Math.round(H*d)){c.width=Math.round(W*d);c.height=Math.round(H*d);}
-  var x=c.getContext("2d"); x.setTransform(d,0,0,d,0,0); x.clearRect(0,0,W,H);
-  var r=live.det,vw=v.videoWidth,vh=v.videoHeight;
-  if(r&&vw){
-    var s=Math.min(W/vw,H/vh),ox=(W-vw*s)/2,oy=(H-vh*s)/2,k=vw/r.w*s;
-    x.beginPath(); x.ellipse(ox+r.e.x*k,oy+r.e.y*k,r.e.a*k,r.e.b*k,r.e.t,0,2*Math.PI);
-    x.lineWidth=5; x.strokeStyle="rgba(0,0,0,.6)"; x.stroke();
-    x.lineWidth=3; x.strokeStyle=live.steady>0?"#5FD39A":"#FFC94A"; x.stroke();
-  }
-  live.raf=requestAnimationFrame(liveDraw);
-}
-function liveCapture(){
-  if(live.busy||!live.on) return;
-  live.busy=true; $("liveMsg").textContent="Taking photo…";
-  var v=$("liveVid");
-  function done(blob){
-    closeLive();
-    if(blob&&blob.size) usePhoto(new File([blob],"camera.jpg",{type:blob.type||"image/jpeg"}),{live:true});
-    else toast("Couldn't take the photo. Try again.");
-  }
-  function fromVideo(){
-    var c=document.createElement("canvas"); c.width=v.videoWidth; c.height=v.videoHeight;
-    c.getContext("2d").drawImage(v,0,0); c.toBlob(done,"image/jpeg",0.95);
-  }
-  if(window.ImageCapture&&live.track){
-    try{ new ImageCapture(live.track).takePhoto().then(done,fromVideo); }catch(e){ fromVideo(); }
-  }else fromVideo();
-}
-$("liveClose").onclick=closeLive;
-$("liveShot").onclick=liveCapture;
-$("liveAuto").onclick=function(){live.auto=!live.auto; store.set("cr.auto",live.auto); this.setAttribute("aria-pressed",String(live.auto)); live.steady=0;};
-document.addEventListener("keydown",function(e){if(e.key==="Escape"&&live.on) closeLive();});
-$("btnCam").onclick=function(){ if(liveSupported()) openLive(); else $("fileCam").click(); };
+$("btnCam").onclick=function(){$("fileCam").click();};
 $("btnGal").onclick=function(){$("fileGal").click();};
 $("fileCam").addEventListener("change",function(){usePhoto(this.files[0]);this.value="";});
 $("fileGal").addEventListener("change",function(){usePhoto(this.files[0]);this.value="";});
