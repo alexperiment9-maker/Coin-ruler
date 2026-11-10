@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Coin Ruler</title>
 <meta name="theme-color" content="#0E161B">
-<meta name="description" content="Measure things in a photo using a coin as the size reference.">
+<meta name="description" content="Measure things in a photo using a coin as the size reference, with tilt correction.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -16,9 +16,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
 :root{
-  /* Layout: one phone-width column. Photo stage on top, tools under the thumb, records below. */
+  /* Layout: one phone-width column. Photo stage on top, tools under the thumb, results and perspective below. */
   --bg:#EDF0F1; --surface:#FFFFFF; --ink:#15212A; --muted:#566772; --rule:#D2D9DE;
-  --brass:#C8922A; --brass-ink:#8A5A00; --on-brass:#1B1402; --stage:#0E161B; --danger:#B3261E;
+  --brass:#C8922A; --brass-ink:#8A5A00; --on-brass:#1B1402; --stage:#0E161B;
+  --good:#1E7F4F; --warn:#9A6200; --bad:#B3261E;
   --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
@@ -26,13 +27,15 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --bg:#0F171C; --surface:#172229; --ink:#E7EDF0; --muted:#94A4AE; --rule:#2A3841;
-    --brass:#D9A53A; --brass-ink:#E6BA5C; --on-brass:#1B1402; --stage:#070C0F; --danger:#FF8A80;
+    --brass:#D9A53A; --brass-ink:#E6BA5C; --on-brass:#1B1402; --stage:#070C0F;
+    --good:#5FD39A; --warn:#F0B54A; --bad:#FF8A80;
     color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
   --bg:#0F171C; --surface:#172229; --ink:#E7EDF0; --muted:#94A4AE; --rule:#2A3841;
-  --brass:#D9A53A; --brass-ink:#E6BA5C; --on-brass:#1B1402; --stage:#070C0F; --danger:#FF8A80;
+  --brass:#D9A53A; --brass-ink:#E6BA5C; --on-brass:#1B1402; --stage:#070C0F;
+  --good:#5FD39A; --warn:#F0B54A; --bad:#FF8A80;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -43,12 +46,14 @@ header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
 h1{font-family:var(--display);font-weight:700;font-size:30px;line-height:1;margin:0;letter-spacing:.01em;text-transform:uppercase}
 h1 span{color:var(--brass-ink)}
 h2{font-family:var(--display);font-weight:600;font-size:20px;line-height:1.1;margin:0;text-transform:uppercase;letter-spacing:.03em;text-wrap:balance}
-button,input{font:inherit;color:inherit}
+button,input,select{font:inherit;color:inherit}
 button{cursor:pointer;border-radius:10px;border:1px solid var(--rule);background:var(--surface);padding:10px 12px;font-weight:600;min-height:44px}
-button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--brass-ink);outline-offset:2px}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--brass-ink);outline-offset:2px}
 button.primary{background:var(--brass);border-color:var(--brass);color:var(--on-brass)}
 button.quiet{background:transparent}
 button.small{min-height:36px;padding:6px 10px;font-size:13px}
+button[aria-pressed="true"].toggle{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .seg{display:flex;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--surface)}
 .seg button{border:0;border-radius:0;min-height:36px;padding:6px 12px;font-family:var(--mono);font-size:13px;background:transparent}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
@@ -61,7 +66,7 @@ button.small{min-height:36px;padding:6px 10px;font-size:13px}
 .coinname b{font-family:var(--mono);font-weight:500;color:var(--brass-ink)}
 #picker{display:flex;flex-direction:column;gap:10px}
 #picker[hidden]{display:none}
-#coinSearch,#customMm{width:100%;border:1px solid var(--rule);border-radius:10px;padding:10px 12px;background:var(--bg);min-height:44px}
+#coinSearch,#customMm,#lensSel{width:100%;border:1px solid var(--rule);border-radius:10px;padding:10px 12px;background:var(--bg);min-height:44px}
 .custom{display:flex;gap:8px;align-items:center}
 .custom input{flex:1}
 #countries{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto;padding-right:2px}
@@ -75,6 +80,7 @@ summary small{color:var(--muted);font-weight:400}
 .stagewrap{position:relative;border-radius:14px;overflow:hidden;background:var(--stage);border:1px solid var(--rule)}
 #cv{display:block;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
 .badge{position:absolute;left:10px;bottom:10px;background:rgba(10,16,20,.8);color:#F2D58A;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:4px 8px;border-radius:6px;pointer-events:none}
+.badge[hidden]{display:none}
 .zoom{position:absolute;right:8px;bottom:8px;display:flex;gap:6px}
 .zoom button{min-height:38px;width:38px;padding:0;background:rgba(10,16,20,.8);color:#fff;border-color:rgba(255,255,255,.25);font-family:var(--mono)}
 .row{display:flex;flex-wrap:wrap;gap:8px}
@@ -87,10 +93,19 @@ summary small{color:var(--muted);font-weight:400}
 #mlist li{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--rule)}
 #mlist li:first-child{border-top:0}
 .num{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:12px;color:#0B1114;font-weight:600}
-.len{flex:1;font-family:var(--mono);font-size:18px;font-variant-numeric:tabular-nums}
+.len{flex:1;font-family:var(--mono);font-size:18px;font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.len small{font-size:12px;color:var(--muted)}
 .empty{color:var(--muted);font-size:13px;margin:0}
+.empty[hidden]{display:none}
 .headrow{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px}
-.acc{font-size:12px;color:var(--muted)}
+.acc{font-size:12px;color:var(--muted);text-align:right}
+.persp{display:flex;flex-direction:column;gap:10px}
+.pstate{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center}
+.tiltnum{font-family:var(--display);font-weight:700;font-size:44px;line-height:.9;font-variant-numeric:tabular-nums}
+.tiltnum small{display:block;font-family:var(--body);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-top:4px}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;border:1px solid currentColor}
+.pill.good{color:var(--good)} .pill.warn{color:var(--warn)} .pill.bad{color:var(--bad)}
+.ptxt{display:flex;flex-direction:column;gap:6px;align-items:flex-start;font-size:14px}
 ol.tips{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:13px;display:flex;flex-direction:column;gap:3px}
 #hist{display:flex;flex-direction:column;gap:10px}
 .h{display:grid;grid-template-columns:104px 1fr;gap:10px;align-items:start;border-top:1px solid var(--rule);padding-top:10px}
@@ -102,7 +117,7 @@ ol.tips{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:13px;displ
 #preview{display:flex;flex-direction:column;gap:8px}
 #preview[hidden]{display:none}
 #preview img{max-width:100%;border-radius:10px;display:block}
-#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:10px;font-size:14px;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgba(0,0,0,.25);z-index:5}
+#toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:10px;font-size:14px;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgba(0,0,0,.25);z-index:5}
 #toast[hidden]{display:none}
 #installBar{display:flex;align-items:center;gap:10px;background:var(--ink);color:var(--bg);border-radius:12px;padding:8px 8px 8px 14px}
 #installBar[hidden]{display:none}
@@ -110,7 +125,23 @@ ol.tips{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:13px;displ
 #installBar button{min-height:38px;padding:6px 12px}
 .prow{display:flex;gap:8px;flex-wrap:wrap}
 .prow button{flex:1 1 auto}
+.tag{font-family:var(--body);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+#live{position:fixed;inset:0;background:#000;z-index:20;color:#fff}
+#live[hidden]{display:none}
+#liveVid,#liveCv{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.ltop{position:absolute;left:0;right:0;top:0;padding:calc(14px + env(safe-area-inset-top)) 16px 14px;background:linear-gradient(rgba(0,0,0,.7),rgba(0,0,0,0));display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+#liveMsg{font-family:var(--display);font-weight:600;font-size:24px;line-height:1.1;text-transform:uppercase;letter-spacing:.02em;text-wrap:balance}
+#liveTilt{font-family:var(--mono);font-size:15px;background:rgba(0,0,0,.55);padding:4px 8px;border-radius:8px;white-space:nowrap}
+#liveTilt:empty{display:none}
+.lbot{position:absolute;left:0;right:0;bottom:0;padding:18px 16px calc(22px + env(safe-area-inset-bottom));background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.75));display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}
+.lbtn{background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.3);justify-self:start}
+#liveAuto{justify-self:end}
+#liveAuto[aria-pressed="true"]{background:#FFC94A;color:#1B1402;border-color:#FFC94A}
+.shutter{--p:0;width:78px;height:78px;border-radius:50%;padding:0;border:0;background:conic-gradient(#5FD39A calc(var(--p)*360deg),rgba(255,255,255,.35) 0);display:grid;place-items:center}
+.shutter span{width:62px;height:62px;border-radius:50%;background:#fff;border:3px solid #000;display:block}
+.lhelp{position:absolute;left:16px;right:16px;bottom:calc(122px + env(safe-area-inset-bottom));text-align:center;font-size:13px;color:rgba(255,255,255,.85);text-shadow:0 1px 3px #000}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
@@ -118,9 +149,9 @@ ol.tips{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:13px;displ
   <header>
     <h1>Coin <span>Ruler</span></h1>
     <div class="seg" role="group" aria-label="Units">
-      <button type="button" id="u-mm" data-u="mm">mm</button>
-      <button type="button" id="u-cm" data-u="cm">cm</button>
-      <button type="button" id="u-in" data-u="in">in</button>
+      <button type="button" id="u-mm">mm</button>
+      <button type="button" id="u-cm">cm</button>
+      <button type="button" id="u-in">in</button>
     </div>
   </header>
 
@@ -162,8 +193,8 @@ ol.tips{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:13px;displ
   </div>
 
   <div class="stagewrap" id="stage">
-    <canvas id="cv" aria-label="Photo with coin circle and measuring lines"></canvas>
-    <div class="badge" id="exBadge">Example photo</div>
+    <canvas id="cv" aria-label="Photo with coin outline and measuring lines"></canvas>
+    <div class="badge" id="exBadge">Example photo, taken at an angle</div>
     <div class="zoom">
       <button type="button" id="zOut" aria-label="Zoom out">−</button>
       <button type="button" id="zIn" aria-label="Zoom in">+</button>
@@ -172,21 +203,23 @@ ol.tips{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:13px;displ
   <p id="status" role="status"></p>
 
   <div class="tools" id="coinTools" hidden>
-    <p class="hint">Make the gold circle sit exactly on the coin's edge. Drag inside it to move, drag the round handle to resize. Pinch to zoom.</p>
+    <p class="hint">Make the gold oval sit exactly on the coin's outer edge. Drag inside it to move. Round handle: length and turn. Diamond handle: width. Pinch to zoom.</p>
     <div class="row">
       <button type="button" id="btnFind">Find coin again</button>
       <button type="button" id="btnSnap">Snap to edge</button>
-      <button type="button" id="btnSm" aria-label="Circle smaller">Smaller</button>
-      <button type="button" id="btnBg" aria-label="Circle bigger">Bigger</button>
+      <button type="button" id="btnSm">Smaller</button>
+      <button type="button" id="btnBg">Bigger</button>
     </div>
-    <button type="button" class="primary" id="btnOk">Circle fits the coin. Start measuring</button>
+    <button type="button" class="primary" id="btnOk">Oval fits the coin. Start measuring</button>
   </div>
 
   <div class="tools" id="measTools" hidden>
     <div class="row">
       <button type="button" class="primary" id="btnAdd">Add line</button>
+      <button type="button" class="primary" id="btnAddH">Add height</button>
       <button type="button" id="btnCoin">Adjust coin</button>
     </div>
+    <button type="button" class="small toggle" id="btnSnap2" aria-pressed="true">Snap line ends to edges</button>
     <div class="row">
       <button type="button" id="btnSave">Save photo with sizes</button>
       <button type="button" id="btnKeep">Keep in history</button>
@@ -199,6 +232,29 @@ ol.tips{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:13px;displ
     <p class="empty" id="mempty" hidden>No lines yet. Tap Add line, then drag each end onto the thing you want to measure.</p>
   </section>
 
+  <section class="card persp" aria-label="Perspective">
+    <div class="headrow" style="margin:0"><h2>Perspective</h2><span class="pill good" id="tiltPill">Straight-on</span></div>
+    <div class="pstate">
+      <div class="tiltnum" id="tiltDeg">0°<small>tilt</small></div>
+      <div class="ptxt">
+        <div id="farTxt">Photo taken straight from above.</div>
+        <button type="button" class="small" id="btnFlip">Flip tilt direction</button>
+      </div>
+    </div>
+    <div>
+      <label class="eyebrow" for="lensSel">Camera lens</label>
+      <select id="lensSel" style="margin-top:6px">
+        <option value="auto" id="lensAuto">From photo</option>
+        <option value="13">Ultra-wide 0.5× (13 mm)</option>
+        <option value="26">Main camera 1× (26 mm)</option>
+        <option value="52">Zoom 2× (52 mm)</option>
+        <option value="77">Zoom 3× (77 mm)</option>
+      </select>
+    </div>
+    <button type="button" class="small toggle" id="btnGrid" aria-pressed="false">Show 1 cm floor grid</button>
+    <p class="hint">The coin's oval shape tells the app how the camera was tilted. Every line is corrected for it. If the grid doesn't line up with the table, tap Flip tilt direction.</p>
+  </section>
+
   <section class="card" id="preview" hidden aria-label="Saved picture">
     <h2>Your picture</h2>
     <p class="hint" id="previewHint">Saved to your Downloads. You can also press and hold the picture to save it.</p>
@@ -209,10 +265,11 @@ ol.tips{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:13px;displ
   <section class="card" aria-label="How to get accurate sizes">
     <h2>For accurate sizes</h2>
     <ol class="tips">
-      <li>Lay the coin flat, right next to the object, on the same surface.</li>
-      <li>Hold the phone straight above, not at an angle.</li>
-      <li>Works for flat things. A tall object looks bigger than it is because its top is closer to the camera.</li>
+      <li>Coin and object must lie flat on the same surface. Tilted photos are fine now.</li>
+      <li>For things that stand up (box, cup, bottle) use Add height. Put the square exactly where the object touches the table, then drag the top. Heights need a tilted photo (20–50° is best).</li>
+      <li>Use the original photo. Cropping or screenshots remove the lens info.</li>
       <li>Fill the frame. A bigger coin in the photo gives a better reading.</li>
+      <li>Under about 45° of tilt is best. Steeper still works but the ± grows.</li>
     </ol>
   </section>
 
@@ -223,6 +280,17 @@ ol.tips{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:13px;displ
   </section>
 </div>
 <div id="toast" role="status" hidden></div>
+<div id="live" hidden role="dialog" aria-label="Live camera">
+  <video id="liveVid" playsinline muted autoplay></video>
+  <canvas id="liveCv" aria-hidden="true"></canvas>
+  <div class="ltop"><div id="liveMsg" role="status">Starting camera…</div><div id="liveTilt"></div></div>
+  <p class="lhelp" id="liveHelp">Put a coin flat next to the object. Any angle up to about 55° works.</p>
+  <div class="lbot">
+    <button type="button" class="lbtn" id="liveClose">Close</button>
+    <button type="button" class="shutter" id="liveShot" aria-label="Take photo now"><span></span></button>
+    <button type="button" class="lbtn" id="liveAuto" aria-pressed="true">Auto shot</button>
+  </div>
+</div>
 
 <script>
 "use strict";
@@ -286,39 +354,230 @@ var toastT=0;
 function toast(msg){var t=$("toast");t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(function(){t.hidden=true;},3600);}
 function setStatus(s){$("status").textContent=s;}
 var COLORS=["#FFD400","#3DE0FF","#FF7ADB","#9BFF5C","#FF9A3D","#C7B8FF"];
+var DEG=Math.PI/180;
+
+/* ---------- small linear algebra ---------- */
+function solveLin(M,b){
+  var n=b.length,A=[],i,j,r,c;
+  for(i=0;i<n;i++) A.push(M[i].concat([b[i]]));
+  for(c=0;c<n;c++){
+    var p=c; for(r=c+1;r<n;r++) if(Math.abs(A[r][c])>Math.abs(A[p][c])) p=r;
+    if(Math.abs(A[p][c])<1e-14) return null;
+    var tmp=A[c];A[c]=A[p];A[p]=tmp;
+    for(r=c+1;r<n;r++){var k=A[r][c]/A[c][c]; if(!k) continue; for(j=c;j<=n;j++) A[r][j]-=k*A[c][j];}
+  }
+  var x=new Array(n);
+  for(i=n-1;i>=0;i--){var s=A[i][n]; for(j=i+1;j<n;j++) s-=A[i][j]*x[j]; x[i]=s/A[i][i];}
+  return x;
+}
+function lsq(rows,rhs){
+  var n=rows[0].length,M=[],b=[],i,j,k;
+  for(i=0;i<n;i++){M.push(new Array(n).fill(0));b.push(0);}
+  for(k=0;k<rows.length;k++){var r=rows[k];for(i=0;i<n;i++){b[i]+=r[i]*rhs[k];for(j=i;j<n;j++) M[i][j]+=r[i]*r[j];}}
+  for(i=0;i<n;i++) for(j=0;j<i;j++) M[i][j]=M[j][i];
+  return solveLin(M,b);
+}
+function circleFit(pts){
+  var n=pts.length,mx=0,my=0,i;
+  for(i=0;i<n;i++){mx+=pts[i][0];my+=pts[i][1];} mx/=n; my/=n;
+  var sc=0; for(i=0;i<n;i++) sc+=Math.abs(pts[i][0]-mx)+Math.abs(pts[i][1]-my); sc=sc/(2*n)||1;
+  var rows=[],rhs=[];
+  for(i=0;i<n;i++){var x=(pts[i][0]-mx)/sc,y=(pts[i][1]-my)/sc; rows.push([x,y,1]); rhs.push(-(x*x+y*y));}
+  var s=lsq(rows,rhs); if(!s) return null;
+  var cx=-s[0]/2, cy=-s[1]/2, r2=cx*cx+cy*cy-s[2]; if(!(r2>0)) return null;
+  var r=Math.sqrt(r2), e=0;
+  for(i=0;i<n;i++){var d=Math.hypot((pts[i][0]-mx)/sc-cx,(pts[i][1]-my)/sc-cy)-r; e+=d*d;}
+  return {x:cx*sc+mx,y:cy*sc+my,r:r*sc,rms:Math.sqrt(e/n)*sc};
+}
+function conicToEllipse(A,B,C,D,E,F){
+  if(A+C<0){A=-A;B=-B;C=-C;D=-D;E=-E;F=-F;}
+  var den=4*A*C-B*B; if(!(den>0)) return null;
+  var x0=(B*E-2*C*D)/den, y0=(B*D-2*A*E)/den;
+  var F0=A*x0*x0+B*x0*y0+C*y0*y0+D*x0+E*y0+F; if(!(F0<0)) return null;
+  var tr=(A+C)/2, df=Math.sqrt((A-C)*(A-C)/4+B*B/4), l1=tr+df, l2=tr-df;
+  if(!(l2>0)) return null;
+  return {x:x0,y:y0,a:Math.sqrt(-F0/l2),b:Math.sqrt(-F0/l1),t:0.5*Math.atan2(B,A-C)+Math.PI/2};
+}
+function ellipseFit(pts){
+  var rows=[],rhs=[];
+  for(var i=0;i<pts.length;i++){var x=pts[i][0],y=pts[i][1]; rows.push([x*x,x*y,y*y,x,y]); rhs.push(1);}
+  var s=lsq(rows,rhs); if(!s) return null;
+  return conicToEllipse(s[0],s[1],s[2],s[3],s[4],-1);
+}
+function ellR(e,ang){var c=Math.cos(ang-e.t),s=Math.sin(ang-e.t);return e.a*e.b/Math.sqrt(e.b*c*e.b*c+e.a*s*e.a*s);}
+function ellRho(e,x,y){var dx=x-e.x,dy=y-e.y,c=Math.cos(e.t),s=Math.sin(e.t);return Math.hypot((dx*c+dy*s)/e.a,(-dx*s+dy*c)/e.b);}
+function ellPts(e,n){
+  var o=[],c=Math.cos(e.t),s=Math.sin(e.t);
+  for(var i=0;i<n;i++){var q=2*Math.PI*i/n,u=e.a*Math.cos(q),v=e.b*Math.sin(q); o.push([e.x+u*c-v*s,e.y+u*s+v*c]);}
+  return o;
+}
+function normEll(e){
+  var o={x:e.x,y:e.y,a:Math.abs(e.a),b:Math.abs(e.b),t:e.t,rms:e.rms};
+  if(o.b>o.a){var t=o.a;o.a=o.b;o.b=t;o.t+=Math.PI/2;}
+  o.t=Math.atan2(Math.sin(2*o.t),Math.cos(2*o.t))/2;
+  return o;
+}
+
+/* ---------- perspective (camera rotation homography) ---------- */
+function mul3(A,B){var o=new Array(9);for(var i=0;i<3;i++)for(var j=0;j<3;j++)o[i*3+j]=A[i*3]*B[j]+A[i*3+1]*B[3+j]+A[i*3+2]*B[6+j];return o;}
+function homog(th,ph,f,cx,cy,inverse){
+  var ux=-Math.sin(ph),uy=Math.cos(ph),c=Math.cos(th),s=Math.sin(th),C1=1-c;
+  var R=[c+C1*ux*ux,C1*ux*uy,s*uy, C1*ux*uy,c+C1*uy*uy,-s*ux, -s*uy,s*ux,c];
+  if(inverse) R=[R[0],R[3],R[6],R[1],R[4],R[7],R[2],R[5],R[8]];
+  return mul3([f,0,cx,0,f,cy,0,0,1],mul3(R,[1/f,0,-cx/f,0,1/f,-cy/f,0,0,1]));
+}
+function hom(H,x,y){return [H[0]*x+H[1]*y+H[2],H[3]*x+H[4]*y+H[5],H[6]*x+H[7]*y+H[8]];}
+function hApply(H,x,y){var q=hom(H,x,y);return [q[0]/q[2],q[1]/q[2],q[2]];}
+function angDist(a,b){var d=Math.abs(a-b)%(2*Math.PI);return d>Math.PI?2*Math.PI-d:d;}
+function poseCost(pts,th,ph,f,cx,cy){
+  var H=homog(th,ph,f,cx,cy),m=new Array(pts.length);
+  for(var i=0;i<pts.length;i++){var q=hApply(H,pts[i][0],pts[i][1]); if(q[2]<0.05) return 1e9; m[i]=q;}
+  var c=circleFit(m); return c?c.rms/c.r:1e9;
+}
+function refinePose(pts,s,f,cx,cy){
+  var th=s.th,ph=s.ph,best=s.cost,dt=1.5*DEG,dp=3.75*DEG;
+  for(var it=0;it<200;it++){
+    var moved=false,C=[[th+dt,ph],[th-dt,ph],[th,ph+dp],[th,ph-dp]];
+    for(var k=0;k<4;k++){
+      var t=C[k][0],p=C[k][1]; if(t<0||t>1.45) continue;
+      var v=poseCost(pts,t,p,f,cx,cy); if(v<best){best=v;th=t;ph=p;moved=true;}
+    }
+    if(!moved){dt/=2;dp/=2;if(dt<1e-6) break;}
+  }
+  return {th:th,ph:ph,cost:best};
+}
+function finishSol(s,e,f,cx,cy){
+  s.H=homog(s.th,s.ph,f,cx,cy); s.Hi=homog(s.th,s.ph,f,cx,cy,true);
+  var m=ellPts(e,96).map(function(p){return hApply(s.H,p[0],p[1]);});
+  s.rc=circleFit(m);
+  function mag(x,y){var p=hApply(s.H,x,y),a=hApply(s.H,x+1,y),b=hApply(s.H,x,y+1);return Math.hypot(a[0]-p[0],a[1]-p[1])+Math.hypot(b[0]-p[0],b[1]-p[1]);}
+  var d=0.8*e.a, fx=mag(e.x+d,e.y)-mag(e.x-d,e.y), fy=mag(e.x,e.y+d)-mag(e.x,e.y-d), n=Math.hypot(fx,fy)||1;
+  s.far=[fx/n,fy/n];
+  return s;
+}
+function solvePose(e,f){
+  var cx=src.width/2,cy=src.height/2,pts=ellPts(e,48),grid=[],it,ip;
+  for(it=0;it<=24;it++){var th=it*3*DEG; for(ip=0;ip<(it?48:1);ip++){var ph=ip*7.5*DEG; grid.push({th:th,ph:ph,cost:poseCost(pts,th,ph,f,cx,cy)});}}
+  grid.sort(function(a,b){return a.cost-b.cost;});
+  var s1=refinePose(pts,grid[0],f,cx,cy),sols=[s1];
+  if(s1.th>1.5*DEG){
+    for(var i=1;i<grid.length;i++){
+      var g=grid[i]; if(g.th<1.5*DEG||angDist(g.ph,s1.ph)<Math.PI/2) continue;
+      var s2=refinePose(pts,g,f,cx,cy);
+      if(s2.th>1*DEG&&angDist(s2.ph,s1.ph)>Math.PI/3&&s2.cost<Math.max(0.02,s1.cost*20)) sols.push(s2);
+      break;
+    }
+  }
+  sols.forEach(function(s){finishSol(s,e,f,cx,cy);});
+  return sols.filter(function(s){return s.rc;});
+}
 
 /* ---------- state ---------- */
 var cv=$("cv"), ctx=cv.getContext("2d");
-var src=null;                      // full photo, on a canvas
-var coin={x:0,y:0,r:10,a:Math.PI/4};
-var lines=[], sel=-1, step="measure", isExample=true;
+var src=null;
+var coin={x:0,y:0,a:10,b:10,t:0,rms:1};
+var lines=[], sel=-1, step="measure";
 var unit=store.get("cr.unit","mm");
 var ref=store.get("cr.coin",{country:"India",name:"₹10 (all years)",d:27});
 if(!ref||!(ref.d>0)) ref={country:"India",name:"₹10 (all years)",d:27};
-var view={z:1,px:0,py:0}, G={cw:300,ch:200,fit:1};
-var loupe=null;                    // {x,y} image point being dragged
+var view={z:1,px:0,py:0}, G={cw:300,ch:200,fit:1,dpr:1};
+var loupe=null;
+var lens={mm:26,from:"default",exif:null};
+var pose={sols:[],def:0,flip:false}, alt=null, altTimer=0;
+var showGrid=false;
 
-function mmPerPx(){return ref.d/(2*coin.r);}
+function lensMM(){return lens.mm;}
+function focalPx(){return lensMM()*Math.hypot(src.width,src.height)/43.267;}
+function cur(){var n=pose.sols.length; if(!n) return null; return pose.sols[(pose.def+(pose.flip?1:0))%n];}
+function tiltDeg(){var s=cur();return s?s.th/DEG:0;}
+function updatePose(full){
+  var f=focalPx(); pose.f=f;
+  var sols=[]; try{sols=solvePose(coin,f);}catch(e){sols=[];}
+  var def=0;
+  if(sols.length>1) def=(sols[1].far[1]<sols[0].far[1])?1:0;
+  pose.sols=sols; pose.def=def;
+  if(sols.length<2) pose.flip=false;
+  alt=null; clearTimeout(altTimer);
+  if(full) altTimer=setTimeout(computeAlt,60);
+  updatePersp();
+}
+function computeAlt(){
+  if(!src||!pose.sols.length) return;
+  var k=(lens.from==="photo"||lens.from==="example")?1.06:(lens.from==="live"?1.15:1.3), f=focalPx();
+  try{ alt=[{f:f*k,sols:solvePose(coin,f*k)},{f:f/k,sols:solvePose(coin,f/k)}]; }catch(e){ alt=null; }
+  refreshList();
+}
+function matchSol(list){
+  var c=cur(); if(!c||!list||!list.length) return null;
+  var best=null,bd=-9;
+  list.forEach(function(s){var d=s.far[0]*c.far[0]+s.far[1]*c.far[1]-(Math.abs(s.th-c.th)>0.5?1:0); if(d>bd){bd=d;best=s;}});
+  return best;
+}
+/* Heights: the rectified view is a camera looking straight down at the table, so an upright edge
+   points at the principal point there. Plane depth Z0 = (mm per rectified px) x focal length. */
+function heightWith(s,l,f){
+  if(!s) return NaN;
+  var cx=src.width/2,cy=src.height/2,Z0=ref.d/(2*s.rc.r)*f;
+  var b=hApply(s.H,l.x1,l.y1),t=hApply(s.H,l.x2,l.y2);
+  if(b[2]<0.05||t[2]<0.05) return NaN;
+  var vx=b[0]-cx,vy=b[1]-cy,L2=vx*vx+vy*vy;
+  if(L2<Math.pow(0.04*f,2)) return NaN;
+  var sc=((t[0]-cx)*vx+(t[1]-cy)*vy)/L2;
+  if(sc<=0.05) return NaN;
+  return Z0*(1-1/sc);
+}
+function topFor(s,bx,by,h,f){
+  var cx=src.width/2,cy=src.height/2,Z0=ref.d/(2*s.rc.r)*f;
+  h=Math.min(h,Z0*0.9);
+  var b=hApply(s.H,bx,by),k=Z0/(Z0-h);
+  return hApply(s.Hi,cx+(b[0]-cx)*k,cy+(b[1]-cy)*k);
+}
+function lineMmWith(s,l,f){
+  if(l.h) return heightWith(s,l,f||pose.f);
+  if(!s) return NaN;
+  var p=hApply(s.H,l.x1,l.y1),q=hApply(s.H,l.x2,l.y2);
+  if(p[2]<0.05||q[2]<0.05) return NaN;
+  return Math.hypot(q[0]-p[0],q[1]-p[1])*ref.d/(2*s.rc.r);
+}
+function lineMm(l){return lineMmWith(cur(),l);}
+function lineErr(l){
+  var L=lineMm(l); if(!isFinite(L)) return NaN;
+  var rel=(0.5+1.2*(coin.rms||1))/(2*coin.b);
+  var spread=0;
+  if(alt){ alt.forEach(function(A){var v=lineMmWith(matchSol(A.sols),l,A.f); if(isFinite(v)) spread=Math.max(spread,Math.abs(v-L));}); }
+  else spread=L*0.01;
+  /* placing each end is good to about 0.8 px */
+  var dx=l.x2-l.x1,dy=l.y2-l.y1,n=Math.hypot(dx,dy)||1,ux=dx/n*0.8,uy=dy/n*0.8;
+  var a1=lineMm({h:l.h,x1:l.x1,y1:l.y1,x2:l.x2+ux,y2:l.y2+uy}),a2=lineMm({h:l.h,x1:l.x1-ux,y1:l.y1-uy,x2:l.x2,y2:l.y2});
+  var px=Math.hypot(isFinite(a1)?a1-L:0,isFinite(a2)?a2-L:0);
+  return Math.sqrt(L*rel*L*rel+spread*spread+(L*0.002)*(L*0.002)+px*px);
+}
 function fmt(mm){
+  if(!isFinite(mm)) return "—";
   if(unit==="cm") return (mm/10).toFixed(2)+" cm";
   if(unit==="in") return (mm/25.4).toFixed(2)+" in";
   return (mm>=1000?mm.toFixed(0):mm.toFixed(1))+" mm";
 }
-function lineMm(l){return Math.hypot(l.x2-l.x1,l.y2-l.y1)*mmPerPx();}
+function fmtErr(mm){
+  if(!isFinite(mm)) return "";
+  if(unit==="cm") return "± "+Math.max(0.01,mm/10).toFixed(2)+" cm";
+  if(unit==="in") return "± "+Math.max(0.01,mm/25.4).toFixed(2)+" in";
+  return "± "+Math.max(0.1,mm).toFixed(1)+" mm";
+}
 
 /* ---------- view geometry ---------- */
 function S(){return G.fit*view.z;}
 function clampView(){
-  var s=S(), w=src.width*s, h=src.height*s;
-  view.px = w<=G.cw ? (G.cw-w)/2 : Math.min(0,Math.max(G.cw-w,view.px));
-  view.py = h<=G.ch ? (G.ch-h)/2 : Math.min(0,Math.max(G.ch-h,view.py));
+  var s=S(),w=src.width*s,h=src.height*s;
+  view.px = w<=G.cw?(G.cw-w)/2:Math.min(0,Math.max(G.cw-w,view.px));
+  view.py = h<=G.ch?(G.ch-h)/2:Math.min(0,Math.max(G.ch-h,view.py));
 }
-function toScr(x,y){var s=S();return [view.px+x*s, view.py+y*s];}
+function toScr(x,y){var s=S();return [view.px+x*s,view.py+y*s];}
 function toImg(x,y){var s=S();return [(x-view.px)/s,(y-view.py)/s];}
 function layout(){
   if(!src) return;
   var cw=$("stage").clientWidth||320;
-  var maxH=Math.max(260,Math.min(520,Math.round(window.innerHeight*0.6)));
+  var maxH=Math.max(260,Math.min(540,Math.round(window.innerHeight*0.62)));
   var ch=Math.min(Math.round(cw*src.height/src.width),maxH);
   var dpr=Math.min(window.devicePixelRatio||1,3);
   cv.style.height=ch+"px"; cv.width=Math.round(cw*dpr); cv.height=Math.round(ch*dpr);
@@ -326,73 +585,97 @@ function layout(){
   clampView(); draw();
 }
 function zoomAt(f,sx,sy){
-  var p=toImg(sx,sy), z=Math.max(1,Math.min(12,view.z*f));
+  var p=toImg(sx,sy),z=Math.max(1,Math.min(14,view.z*f));
   view.z=z; var s=S(); view.px=sx-p[0]*s; view.py=sy-p[1]*s; clampView(); draw();
 }
 
 /* ---------- drawing (shared by screen and saved picture) ---------- */
 function strokeBoth(c,col,w,u){c.lineWidth=(w+2.5)*u;c.strokeStyle="rgba(8,12,15,.85)";c.stroke();c.lineWidth=w*u;c.strokeStyle=col;c.stroke();}
+function rr(c,x,y,w,h,r){c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
 function pill(c,text,x,y,col,u,W,H){
   c.font="600 "+Math.round(13*u)+"px 'IBM Plex Sans',system-ui,sans-serif";
-  var tw=c.measureText(text).width, pw=tw+14*u, ph=22*u;
+  var tw=c.measureText(text).width,pw=tw+14*u,ph=22*u;
   x=Math.max(pw/2+3*u,Math.min(W-pw/2-3*u,x)); y=Math.max(ph/2+3*u,Math.min(H-ph/2-3*u,y));
-  c.fillStyle="rgba(8,12,15,.86)";
-  c.beginPath(); rr(c,x-pw/2,y-ph/2,pw,ph,6*u); c.fill();
+  c.fillStyle="rgba(8,12,15,.86)"; c.beginPath(); rr(c,x-pw/2,y-ph/2,pw,ph,6*u); c.fill();
   c.fillStyle=col; c.textAlign="center"; c.textBaseline="middle"; c.fillText(text,x,y+0.5*u);
 }
-function rr(c,x,y,w,h,r){c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+function drawGrid(c,s,ox,oy,u){
+  var so=cur(); if(!so) return;
+  var st=10*(2*so.rc.r)/ref.d, n=15, E=0.04, Hi=so.Hi, k;
+  function seg(p,q){
+    var a=hom(Hi,p[0],p[1]),b=hom(Hi,q[0],q[1]);
+    if(a[2]<E&&b[2]<E) return;
+    if(a[2]<E||b[2]<E){var t=(E-a[2])/(b[2]-a[2]),m=[a[0]+t*(b[0]-a[0]),a[1]+t*(b[1]-a[1]),E]; if(a[2]<E) a=m; else b=m;}
+    c.moveTo(ox+a[0]/a[2]*s,oy+a[1]/a[2]*s); c.lineTo(ox+b[0]/b[2]*s,oy+b[1]/b[2]*s);
+  }
+  var cx=so.rc.x, cy=so.rc.y;
+  for(var pass=0;pass<2;pass++){
+    c.beginPath();
+    for(k=-n;k<=n;k++){
+      if((k%5===0)!==(pass===1)) continue;
+      seg([cx+k*st,cy-n*st],[cx+k*st,cy+n*st]); seg([cx-n*st,cy+k*st],[cx+n*st,cy+k*st]);
+    }
+    c.lineWidth=(pass?1.4:0.8)*u; c.strokeStyle=pass?"rgba(160,240,255,.75)":"rgba(160,240,255,.38)"; c.stroke();
+  }
+}
 function render(c,s,ox,oy,u,W,H,o){
   c.imageSmoothingQuality="high";
   c.drawImage(src,ox,oy,src.width*s,src.height*s);
+  if(o.grid) drawGrid(c,s,ox,oy,u);
   var gold="#FFC94A";
-  // coin
-  var cx=ox+coin.x*s, cy=oy+coin.y*s, cr=coin.r*s;
-  c.beginPath(); c.arc(cx,cy,cr,0,Math.PI*2);
-  if(o.coinActive){strokeBoth(c,gold,2,u);} else {c.setLineDash([6*u,5*u]); strokeBoth(c,gold,1.5,u); c.setLineDash([]);}
+  var cx=ox+coin.x*s,cy=oy+coin.y*s,ca=Math.cos(coin.t),sa=Math.sin(coin.t);
+  c.beginPath(); c.ellipse(cx,cy,Math.max(1,coin.a*s),Math.max(1,coin.b*s),coin.t,0,Math.PI*2);
+  if(o.coinActive){strokeBoth(c,gold,1.6,u);} else {c.setLineDash([6*u,5*u]); strokeBoth(c,gold,1.5,u); c.setLineDash([]);}
   if(o.coinActive){
-    c.beginPath(); c.moveTo(cx-7*u,cy); c.lineTo(cx+7*u,cy); c.moveTo(cx,cy-7*u); c.lineTo(cx,cy+7*u); strokeBoth(c,gold,1.5,u);
-    var hx=cx+Math.cos(coin.a)*cr, hy=cy+Math.sin(coin.a)*cr;
-    c.beginPath(); c.arc(hx,hy,9*u,0,Math.PI*2); c.fillStyle=gold; c.fill(); c.lineWidth=2*u; c.strokeStyle="rgba(8,12,15,.85)"; c.stroke();
+    var ax=cx+ca*coin.a*s, ay=cy+sa*coin.a*s, bx=cx-sa*coin.b*s, by=cy+ca*coin.b*s;
+    c.beginPath(); c.moveTo(cx,cy); c.lineTo(ax,ay); c.moveTo(cx,cy); c.lineTo(bx,by); c.setLineDash([4*u,4*u]); strokeBoth(c,gold,1,u); c.setLineDash([]);
+    c.beginPath(); c.moveTo(cx-6*u,cy); c.lineTo(cx+6*u,cy); c.moveTo(cx,cy-6*u); c.lineTo(cx,cy+6*u); strokeBoth(c,gold,1.5,u);
+    c.beginPath(); c.arc(ax,ay,9*u,0,Math.PI*2); c.fillStyle=gold; c.fill(); c.lineWidth=2*u; c.strokeStyle="rgba(8,12,15,.85)"; c.stroke();
+    c.beginPath(); c.moveTo(bx,by-10*u); c.lineTo(bx+10*u,by); c.lineTo(bx,by+10*u); c.lineTo(bx-10*u,by); c.closePath(); c.fillStyle=gold; c.fill(); c.stroke();
   }
-  pill(c,ref.name.replace(/\s*\(.*\)$/,"")+" = "+fmt(ref.d),cx,cy-cr-16*u,gold,u,W,H);
+  var ext=Math.sqrt(Math.pow(coin.a*sa,2)+Math.pow(coin.b*ca,2))*s;
+  var tl=tiltDeg(), lbl=ref.name.replace(/\s*\(.*\)$/,"")+" = "+fmt(ref.d)+(tl>=3?" · tilt "+Math.round(tl)+"°":"");
+  pill(c,lbl,cx,cy-ext-16*u,gold,u,W,H);
   if(!o.lines) return;
   for(var i=0;i<lines.length;i++){
-    var l=lines[i], col=COLORS[i%COLORS.length];
+    var l=lines[i],col=COLORS[i%COLORS.length];
     var x1=ox+l.x1*s,y1=oy+l.y1*s,x2=ox+l.x2*s,y2=oy+l.y2*s;
     c.beginPath(); c.moveTo(x1,y1); c.lineTo(x2,y2); strokeBoth(c,col,i===sel&&o.handles?2.5:2,u);
     var ends=[[x1,y1],[x2,y2]];
     for(var e=0;e<2;e++){
-      var ex=ends[e][0], ey=ends[e][1];
-      if(o.handles){
+      var ex=ends[e][0],ey=ends[e][1];
+      if(l.h&&e===0&&o.handles){
+        c.beginPath(); c.rect(ex-9*u,ey-9*u,18*u,18*u); strokeBoth(c,col,1.5,u);
+        c.beginPath(); c.arc(ex,ey,1.6*u,0,Math.PI*2); c.fillStyle=col; c.fill();
+      }else if(o.handles){
         c.beginPath(); c.arc(ex,ey,11*u,0,Math.PI*2); strokeBoth(c,col,1.5,u);
         c.beginPath(); c.arc(ex,ey,1.6*u,0,Math.PI*2); c.fillStyle=col; c.fill();
       }else{
-        var dx=x2-x1, dy=y2-y1, n=Math.hypot(dx,dy)||1, nx=-dy/n*7*u, ny=dx/n*7*u;
+        var dx=x2-x1,dy=y2-y1,nn=Math.hypot(dx,dy)||1,nx=-dy/nn*7*u,ny=dx/nn*7*u;
         c.beginPath(); c.moveTo(ex-nx,ey-ny); c.lineTo(ex+nx,ey+ny); strokeBoth(c,col,2,u);
       }
     }
-    var mx=(x1+x2)/2,my=(y1+y2)/2,dx2=x2-x1,dy2=y2-y1,nn=Math.hypot(dx2,dy2)||1;
-    var px=-dy2/nn, py=dx2/nn; if(py>0){px=-px;py=-py;}
-    pill(c,(i+1)+"  "+fmt(lineMm(l)),mx+px*20*u,my+py*20*u,col,u,W,H);
+    var mx=(x1+x2)/2,my=(y1+y2)/2,dx2=x2-x1,dy2=y2-y1,n2=Math.hypot(dx2,dy2)||1,px=-dy2/n2,py=dx2/n2;
+    if(py>0){px=-px;py=-py;}
+    if(l.h){px=(x2-x1)/n2;py=(y2-y1)/n2; var qx=-py,qy=px; if(qx<0){qx=-qx;qy=-qy;} pill(c,(i+1)+" ↑ "+fmt(lineMm(l)),mx+qx*44*u,my+qy*44*u,col,u,W,H);}
+    else pill(c,(i+1)+"  "+fmt(lineMm(l)),mx+px*20*u,my+py*20*u,col,u,W,H);
   }
 }
 function draw(){
   if(!src) return;
   var d=G.dpr||1; ctx.setTransform(d,0,0,d,0,0);
   ctx.fillStyle="#0A1014"; ctx.fillRect(0,0,G.cw,G.ch);
-  render(ctx,S(),view.px,view.py,1,G.cw,G.ch,{coinActive:step==="coin",lines:step==="measure",handles:true});
+  render(ctx,S(),view.px,view.py,1,G.cw,G.ch,{coinActive:step==="coin",lines:step==="measure",handles:true,grid:showGrid||step==="coin"});
   if(loupe) drawLoupe();
 }
 function drawLoupe(){
-  var R=58, p=toScr(loupe.x,loupe.y);
-  var lx=(p[0]<G.cw/2 && p[1]<R*2+40)? G.cw-R-10 : R+10, ly=R+10;
-  var m=Math.max(S()*2.6,1.2);
+  var R=58,p=toScr(loupe.x,loupe.y);
+  var lx=(p[0]<G.cw/2&&p[1]<R*2+40)?G.cw-R-10:R+10, ly=R+10, m=Math.max(S()*2.6,1.2);
   ctx.save(); ctx.beginPath(); ctx.arc(lx,ly,R,0,Math.PI*2); ctx.clip();
   ctx.fillStyle="#0A1014"; ctx.fillRect(lx-R,ly-R,2*R,2*R);
-  ctx.imageSmoothingEnabled=true;
   ctx.drawImage(src,lx-loupe.x*m,ly-loupe.y*m,src.width*m,src.height*m);
   if(step==="coin"){
-    ctx.beginPath(); ctx.arc(lx+(coin.x-loupe.x)*m,ly+(coin.y-loupe.y)*m,coin.r*m,0,Math.PI*2);
+    ctx.beginPath(); ctx.ellipse(lx+(coin.x-loupe.x)*m,ly+(coin.y-loupe.y)*m,coin.a*m,coin.b*m,coin.t,0,Math.PI*2);
     ctx.lineWidth=3.5; ctx.strokeStyle="rgba(8,12,15,.8)"; ctx.stroke(); ctx.lineWidth=1.5; ctx.strokeStyle="#FFC94A"; ctx.stroke();
   }
   ctx.beginPath(); ctx.moveTo(lx-R,ly); ctx.lineTo(lx-6,ly); ctx.moveTo(lx+6,ly); ctx.lineTo(lx+R,ly);
@@ -403,69 +686,94 @@ function drawLoupe(){
 }
 
 /* ---------- touch and mouse ---------- */
-var ptrs=new Map(), drag=null, pinch=null;
+var ptrs=new Map(), drag=null, pinch=null, poseRaf=0;
 function pos(e){var r=cv.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top];}
 function hit(p){
-  var s=S(), i, best=null, bd=30;
+  var s=S(),i,best=null,bd=30;
   if(step==="measure"){
     for(i=0;i<lines.length;i++){
-      var l=lines[i], a=toScr(l.x1,l.y1), b=toScr(l.x2,l.y2);
-      var da=Math.hypot(p[0]-a[0],p[1]-a[1]), db=Math.hypot(p[0]-b[0],p[1]-b[1]);
+      var l=lines[i],a=toScr(l.x1,l.y1),b=toScr(l.x2,l.y2);
+      var da=Math.hypot(p[0]-a[0],p[1]-a[1]),db=Math.hypot(p[0]-b[0],p[1]-b[1]);
       if(da<bd){bd=da;best={k:"end",i:i,w:1,dx:a[0]-p[0],dy:a[1]-p[1]};}
       if(db<bd){bd=db;best={k:"end",i:i,w:2,dx:b[0]-p[0],dy:b[1]-p[1]};}
     }
     if(best){sel=best.i;return best;}
   }else{
-    var c=toScr(coin.x,coin.y), cr=coin.r*s;
-    var hx=c[0]+Math.cos(coin.a)*cr, hy=c[1]+Math.sin(coin.a)*cr;
-    var dc=Math.hypot(p[0]-c[0],p[1]-c[1]);
-    if(Math.hypot(p[0]-hx,p[1]-hy)<30 || Math.abs(dc-cr)<14) return {k:"rim",off:cr-dc};
-    if(dc<Math.max(cr,30)) return {k:"coin",dx:c[0]-p[0],dy:c[1]-p[1]};
+    var c=toScr(coin.x,coin.y),ca=Math.cos(coin.t),sa=Math.sin(coin.t);
+    var ax=c[0]+ca*coin.a*s,ay=c[1]+sa*coin.a*s,bx=c[0]-sa*coin.b*s,by=c[1]+ca*coin.b*s;
+    if(Math.hypot(p[0]-ax,p[1]-ay)<28) return {k:"ha"};
+    if(Math.hypot(p[0]-bx,p[1]-by)<28) return {k:"hb"};
+    var q=toImg(p[0],p[1]),rho=ellRho(coin,q[0],q[1]);
+    if(Math.abs(rho-1)*coin.b*s<14) return {k:"rim",rho0:rho,a0:coin.a,b0:coin.b};
+    if(rho<1||Math.hypot(p[0]-c[0],p[1]-c[1])<30) return {k:"coin",dx:c[0]-p[0],dy:c[1]-p[1]};
   }
   return {k:"pan",sx:p[0],sy:p[1],px:view.px,py:view.py};
 }
+function coinChanged(){
+  if(poseRaf) return;
+  poseRaf=requestAnimationFrame(function(){poseRaf=0;updatePose(false);draw();refreshList(true);});
+}
 function applyDrag(p){
-  var q;
+  var q,s=S(),c;
   if(drag.k==="end"){
     q=toImg(p[0]+drag.dx,p[1]+drag.dy);
     q[0]=Math.max(0,Math.min(src.width,q[0])); q[1]=Math.max(0,Math.min(src.height,q[1]));
-    var l=lines[drag.i]; if(drag.w===1){l.x1=q[0];l.y1=q[1];}else{l.x2=q[0];l.y2=q[1];}
+    var l=lines[drag.i], so=cur();
+    if(l.h&&so){
+      if(drag.w===1){
+        var h0=lineMm(l); l.x1=q[0]; l.y1=q[1];
+        if(isFinite(h0)){var tp=topFor(so,l.x1,l.y1,Math.max(1,h0),pose.f); if(tp[2]>0){l.x2=tp[0];l.y2=tp[1];}}
+      }else{
+        var hh=heightWith(so,{x1:l.x1,y1:l.y1,x2:q[0],y2:q[1]},pose.f);
+        if(isFinite(hh)){var tp2=topFor(so,l.x1,l.y1,Math.max(0.5,hh),pose.f); if(tp2[2]>0){q=[tp2[0],tp2[1]];}}
+        l.x2=q[0]; l.y2=q[1];
+      }
+    }else if(drag.w===1){l.x1=q[0];l.y1=q[1];}else{l.x2=q[0];l.y2=q[1];}
     loupe={x:q[0],y:q[1]};
+  }else if(drag.k==="ha"){
+    c=toScr(coin.x,coin.y); coin.a=Math.max(3,Math.hypot(p[0]-c[0],p[1]-c[1])/s); coin.t=Math.atan2(p[1]-c[1],p[0]-c[0]);
+    coin.rms=1; loupe={x:coin.x+Math.cos(coin.t)*coin.a,y:coin.y+Math.sin(coin.t)*coin.a}; coinChanged();
+  }else if(drag.k==="hb"){
+    c=toScr(coin.x,coin.y); coin.b=Math.max(3,Math.abs(-(p[0]-c[0])*Math.sin(coin.t)+(p[1]-c[1])*Math.cos(coin.t))/s);
+    coin.rms=1; loupe={x:coin.x-Math.sin(coin.t)*coin.b,y:coin.y+Math.cos(coin.t)*coin.b}; coinChanged();
   }else if(drag.k==="rim"){
-    var c=toScr(coin.x,coin.y), dc=Math.hypot(p[0]-c[0],p[1]-c[1]);
-    coin.a=Math.atan2(p[1]-c[1],p[0]-c[0]); coin.r=Math.max(4,(dc+drag.off)/S());
-    loupe={x:coin.x+Math.cos(coin.a)*coin.r,y:coin.y+Math.sin(coin.a)*coin.r};
+    q=toImg(p[0],p[1]);
+    var k=ellRho({x:coin.x,y:coin.y,a:drag.a0,b:drag.b0,t:coin.t},q[0],q[1])/drag.rho0;
+    coin.a=Math.max(3,drag.a0*k); coin.b=Math.max(3,drag.b0*k); coin.rms=1;
+    loupe={x:q[0],y:q[1]}; coinChanged();
   }else if(drag.k==="coin"){
     q=toImg(p[0]+drag.dx,p[1]+drag.dy); coin.x=q[0]; coin.y=q[1];
-    loupe={x:coin.x+Math.cos(coin.a)*coin.r,y:coin.y+Math.sin(coin.a)*coin.r};
+    loupe={x:coin.x+Math.cos(coin.t)*coin.a,y:coin.y+Math.sin(coin.t)*coin.a}; coinChanged();
   }else if(drag.k==="pan"){
     view.px=drag.px+p[0]-drag.sx; view.py=drag.py+p[1]-drag.sy; clampView();
   }
 }
 function pinchInfo(){
   var a=[]; ptrs.forEach(function(v){a.push(v);});
-  return {d:Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1])||1, mx:(a[0][0]+a[1][0])/2, my:(a[0][1]+a[1][1])/2};
+  return {d:Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1])||1,mx:(a[0][0]+a[1][0])/2,my:(a[0][1]+a[1][1])/2};
 }
 cv.addEventListener("pointerdown",function(e){
   try{cv.setPointerCapture(e.pointerId);}catch(_){}
   var p=pos(e); ptrs.set(e.pointerId,p);
   if(ptrs.size===2){drag=null;loupe=null;var i=pinchInfo();pinch={d:i.d,z:view.z,img:toImg(i.mx,i.my)};draw();return;}
   if(ptrs.size>2) return;
-  drag=hit(p); if(drag.k!=="pan") applyDrag(p); draw(); e.preventDefault();
+  drag=hit(p); if(drag.k==="end"||drag.k==="ha"||drag.k==="hb") applyDrag(p); draw(); e.preventDefault();
 });
 cv.addEventListener("pointermove",function(e){
   if(!ptrs.has(e.pointerId)) return;
   var p=pos(e); ptrs.set(e.pointerId,p);
   if(pinch&&ptrs.size>=2){
-    var i=pinchInfo(); view.z=Math.max(1,Math.min(12,pinch.z*i.d/pinch.d));
+    var i=pinchInfo(); view.z=Math.max(1,Math.min(14,pinch.z*i.d/pinch.d));
     var s=S(); view.px=i.mx-pinch.img[0]*s; view.py=i.my-pinch.img[1]*s; clampView(); draw(); return;
   }
   if(!drag) return; applyDrag(p); draw();
-  if(drag.k!=="pan") refreshList(true);
+  if(drag.k==="end") refreshList(true);
 });
 function endPtr(e){
+  var wasCoin=drag&&/^(ha|hb|rim|coin)$/.test(drag.k);
+  if(drag&&drag.k==="end"&&snapOn&&ptrs.size===1) snapEnd(drag.i,drag.w);
   ptrs.delete(e.pointerId); if(ptrs.size<2) pinch=null;
-  if(ptrs.size===0){drag=null;loupe=null;refreshList();}
+  if(ptrs.size===0){drag=null;loupe=null; if(wasCoin) updatePose(true); refreshList();}
   draw();
 }
 cv.addEventListener("pointerup",endPtr); cv.addEventListener("pointercancel",endPtr);
@@ -475,41 +783,41 @@ $("zOut").onclick=function(){zoomAt(1/1.5,G.cw/2,G.ch/2);};
 
 /* ---------- finding the coin ---------- */
 function grayOf(c,w,h){
-  var d=c.getContext("2d",{willReadFrequently:true}).getImageData(0,0,w,h).data, g=new Float32Array(w*h);
+  var d=c.getContext("2d",{willReadFrequently:true}).getImageData(0,0,w,h).data,g=new Float32Array(w*h);
   for(var i=0,j=0;i<g.length;i++,j+=4) g[i]=0.299*d[j]+0.587*d[j+1]+0.114*d[j+2];
   return g;
 }
 function blur3(g,w,h){
-  var o=new Float32Array(w*h), x,y;
+  var o=new Float32Array(w*h),x,y;
   for(y=0;y<h;y++) for(x=0;x<w;x++){
     var s=0,n=0;
-    for(var yy=y-1;yy<=y+1;yy++){ if(yy<0||yy>=h) continue; for(var xx=x-1;xx<=x+1;xx++){ if(xx<0||xx>=w) continue; s+=g[yy*w+xx]; n++; } }
+    for(var yy=y-1;yy<=y+1;yy++){if(yy<0||yy>=h) continue; for(var xx=x-1;xx<=x+1;xx++){if(xx<0||xx>=w) continue; s+=g[yy*w+xx]; n++;}}
     o[y*w+x]=s/n;
   }
   return o;
 }
 function detectCoin(){
   var k=Math.min(1,320/Math.max(src.width,src.height));
-  var w=Math.max(8,Math.round(src.width*k)), h=Math.max(8,Math.round(src.height*k)), wh=w*h;
+  var w=Math.max(8,Math.round(src.width*k)),h=Math.max(8,Math.round(src.height*k)),wh=w*h;
   var c=document.createElement("canvas"); c.width=w; c.height=h;
   c.getContext("2d",{willReadFrequently:true}).drawImage(src,0,0,w,h);
-  var g=blur3(grayOf(c,w,h),w,h), x,y,i;
-  var gx=new Float32Array(wh), gy=new Float32Array(wh), mag=new Float32Array(wh), hist=new Uint32Array(1024);
+  var g=blur3(grayOf(c,w,h),w,h),x,y,i;
+  var gx=new Float32Array(wh),gy=new Float32Array(wh),mag=new Float32Array(wh),hist=new Uint32Array(1024);
   for(y=1;y<h-1;y++) for(x=1;x<w-1;x++){
     i=y*w+x;
     var a=g[i-w-1],b=g[i-w],cc=g[i-w+1],d=g[i-1],f=g[i+1],p=g[i+w-1],q=g[i+w],r=g[i+w+1];
     gx[i]=(cc+2*f+r)-(a+2*d+p); gy[i]=(p+2*q+r)-(a+2*b+cc);
     mag[i]=Math.hypot(gx[i],gy[i]); hist[Math.min(1023,mag[i]|0)]++;
   }
-  var need=wh*0.13, acc0=0, thr=1023; while(thr>24&&acc0<need){acc0+=hist[thr];thr--;}
-  var md=Math.min(w,h), rmin=Math.max(6,Math.round(md*0.025)), rmax=Math.max(rmin+2,Math.round(md*0.32)), nr=rmax-rmin+1;
+  var need=wh*0.13,acc0=0,thr=1023; while(thr>24&&acc0<need){acc0+=hist[thr];thr--;}
+  var md=Math.min(w,h),rmin=Math.max(6,Math.round(md*0.025)),rmax=Math.max(rmin+2,Math.round(md*0.32)),nr=rmax-rmin+1;
   var acc=new Uint16Array(nr*wh);
   for(y=1;y<h-1;y++) for(x=1;x<w-1;x++){
     i=y*w+x; var m=mag[i]; if(m<thr) continue;
-    var ux=gx[i]/m, uy=gy[i]/m;
+    var ux=gx[i]/m,uy=gy[i]/m;
     for(var ri=0;ri<nr;ri++){
-      var rad=rmin+ri, base=ri*wh;
-      var ax=Math.round(x+rad*ux), ay=Math.round(y+rad*uy);
+      var rad=rmin+ri,base=ri*wh;
+      var ax=Math.round(x+rad*ux),ay=Math.round(y+rad*uy);
       if(ax>=0&&ax<w&&ay>=0&&ay<h) acc[base+ay*w+ax]++;
       ax=Math.round(x-rad*ux); ay=Math.round(y-rad*uy);
       if(ax>=0&&ax<w&&ay>=0&&ay<h) acc[base+ay*w+ax]++;
@@ -524,110 +832,217 @@ function detectCoin(){
   }
   var best=0,bx=0,by=0,bri=0;
   for(var ri2=0;ri2<nr;ri2++){
-    var rad2=rmin+ri2, lo=rad2*0.9, base2=ri2*wh;
+    var rad2=rmin+ri2,lo=rad2*0.9,base2=ri2*wh;
     for(y=1;y<h-1;y++) for(x=1;x<w-1;x++){
       if(acc[base2+y*w+x]<lo) continue;
       var v=sc(ri2,x,y); if(v>best){best=v;bx=x;by=y;bri=ri2;}
     }
   }
-  if(best<4.2) return null;
-  // a two-metal coin has an inner ring: prefer the outer edge when it is nearly as strong
+  if(best<3.6) return null;
   var lim=Math.min(nr-1,Math.round((rmin+bri)*1.7)-rmin);
   for(var r3=lim;r3>bri+1;r3--){
     var bb=0,ox=0,oy=0;
     for(var yy=-2;yy<=2;yy++) for(var xx=-2;xx<=2;xx++){var t=sc(r3,bx+xx,by+yy); if(t>bb){bb=t;ox=bx+xx;oy=by+yy;}}
     if(bb>=best*0.62){bx=ox;by=oy;bri=r3;break;}
   }
-  return {x:(bx+0.5)/k,y:(by+0.5)/k,r:(rmin+bri)/k,score:best};
+  return {x:(bx+0.5)/k,y:(by+0.5)/k,r:(rmin+bri)/k};
 }
-function fitCircle(pts){
-  var n=pts.length,sx=0,sy=0,sxx=0,syy=0,sxy=0,sxz=0,syz=0,sz=0,i;
-  for(i=0;i<n;i++){var x=pts[i][0],y=pts[i][1],z=x*x+y*y;sx+=x;sy+=y;sxx+=x*x;syy+=y*y;sxy+=x*y;sxz+=x*z;syz+=y*z;sz+=z;}
-  var det=sxx*(syy*n-sy*sy)-sxy*(sxy*n-sy*sx)+sx*(sxy*sy-syy*sx);
-  if(Math.abs(det)<1e-9) return null;
-  var b1=-sxz,b2=-syz,b3=-sz;
-  var A=(b1*(syy*n-sy*sy)-sxy*(b2*n-sy*b3)+sx*(b2*sy-syy*b3))/det;
-  var B=(sxx*(b2*n-sy*b3)-b1*(sxy*n-sy*sx)+sx*(sxy*b3-b2*sx))/det;
-  var C=(sxx*(syy*b3-b2*sy)-sxy*(sxy*b3-b2*sx)+b1*(sxy*sy-syy*sx))/det;
-  var cx=-A/2, cy=-B/2, rr2=cx*cx+cy*cy-C; if(!(rr2>0)) return null;
-  return {x:cx,y:cy,r:Math.sqrt(rr2)};
-}
-function refineCoin(c0){
-  var N=280, half=N/2, k=100/c0.r;
+function refineEllipse(e,lo,hi,mode){
+  var big=Math.max(e.a,e.b),RT=Math.max(90,Math.min(big,220)),k=RT/big;
+  var N=Math.ceil(2*RT*hi+24),half=N/2;
   var c=document.createElement("canvas"); c.width=N; c.height=N;
   var x2=c.getContext("2d",{willReadFrequently:true}); x2.fillStyle="#808080"; x2.fillRect(0,0,N,N);
-  x2.imageSmoothingQuality="high";
-  x2.drawImage(src,half-c0.x*k,half-c0.y*k,src.width*k,src.height*k);
+  x2.imageSmoothingEnabled=true; x2.imageSmoothingQuality="high";
+  x2.drawImage(src,half-e.x*k,half-e.y*k,src.width*k,src.height*k);
   var g=blur3(blur3(grayOf(c,N,N),N,N),N,N);
   function smp(x,y){
     if(x<0||y<0||x>N-1.001||y>N-1.001) return -1;
-    var xi=x|0, yi=y|0, fx=x-xi, fy=y-yi, j=yi*N+xi;
+    var xi=x|0,yi=y|0,fx=x-xi,fy=y-yi,j=yi*N+xi;
     return g[j]*(1-fx)*(1-fy)+g[j+1]*fx*(1-fy)+g[j+N]*(1-fx)*fy+g[j+N+1]*fx*fy;
   }
-  var pts=[];
-  for(var a=0;a<120;a++){
-    var th=a*Math.PI/60, cs=Math.cos(th), sn=Math.sin(th), prof=[], mx=0;
-    for(var r=78;r<=130;r++){
-      var v1=smp(half+(r+2)*cs,half+(r+2)*sn), v0=smp(half+(r-2)*cs,half+(r-2)*sn);
-      var gd=(v1<0||v0<0)?0:Math.abs(v1-v0); prof.push(gd); if(gd>mx) mx=gd;
+  var ek={x:0,y:0,a:e.a*k,b:e.b*k,t:e.t},pts=[],NA=180;
+  for(var ai=0;ai<NA;ai++){
+    var th=ai*2*Math.PI/NA,cs=Math.cos(th),sn=Math.sin(th),re=ellR(ek,th),prof=[],rs=[],mx=0;
+    for(var r=re*lo;r<=re*hi;r+=0.5){
+      var v1=smp(half+(r+1.5)*cs,half+(r+1.5)*sn),v0=smp(half+(r-1.5)*cs,half+(r-1.5)*sn);
+      var gd=(v1<0||v0<0)?0:Math.abs(v1-v0); prof.push(gd); rs.push(r); if(gd>mx) mx=gd;
     }
-    if(mx<7) continue;
+    if(mx<6) continue;
     var pick=-1;
-    for(var j2=prof.length-1;j2>=0;j2--){ if(prof[j2]>=0.6*mx){pick=j2;break;} }
-    while(pick>0&&prof[pick-1]>prof[pick]) pick--;
-    var rp=78+pick; pts.push([(rp)*cs,(rp)*sn]);
+    if(mode==="near"){
+      var bestD=1e9;
+      for(var j3=1;j3<prof.length-1;j3++){
+        if(prof[j3]>=0.5*mx&&prof[j3]>=prof[j3-1]&&prof[j3]>=prof[j3+1]){var dd0=Math.abs(rs[j3]-re); if(dd0<bestD){bestD=dd0;pick=j3;}}
+      }
+      if(pick<0) continue;
+    }else{
+      for(var j2=prof.length-1;j2>=0;j2--){if(prof[j2]>=0.55*mx){pick=j2;break;}}
+      while(pick>0&&prof[pick-1]>prof[pick]) pick--;
+    }
+    var off=0;
+    if(pick>0&&pick<prof.length-1){var y0=prof[pick-1],y1=prof[pick],y2=prof[pick+1],dd=y0-2*y1+y2; if(dd<0) off=Math.max(-0.5,Math.min(0.5,0.5*(y0-y2)/dd));}
+    var rp=rs[pick]+off*0.5;
+    pts.push([rp*cs/RT,rp*sn/RT]);
+  }
+  if(pts.length<60) return null;
+  var f=ellipseFit(pts); if(!f) return null;
+  function res(p){return Math.abs(ellRho(f,p[0],p[1])-1)*Math.sqrt(f.a*f.b);}
+  var rs2=pts.map(res),srt=rs2.slice().sort(function(a,b){return a-b;}),med=srt[srt.length>>1],tol=Math.max(1.2/RT,2.5*med);
+  var keep=pts.filter(function(p,i){return rs2[i]<=tol;});
+  if(keep.length>=60){var f2=ellipseFit(keep); if(f2) f=f2;}
+  var ss=0; keep.forEach(function(p){var q=res(p);ss+=q*q;});
+  var out=normEll({x:e.x+f.x*RT/k,y:e.y+f.y*RT/k,a:f.a*RT/k,b:f.b*RT/k,t:f.t,rms:Math.sqrt(ss/keep.length)*RT/k});
+  var m0=Math.sqrt(e.a*e.b),m1=Math.sqrt(out.a*out.b);
+  if(out.b/out.a<0.22||Math.hypot(out.x-e.x,out.y-e.y)>0.4*m0||m1<m0*lo*0.9||m1>m0*hi*1.1) return null;
+  out.cover=pts.length/NA;
+  return out;
+}
+/* Robust oval search: random 5-point ovals checked against edge pixels (position and direction). */
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;var t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+function ransacEllipse(d,iters){
+  var R0=3.1*d.r, k=Math.min(2,150/R0), N=Math.ceil(2*R0*k), half=N/2;
+  var c=document.createElement("canvas"); c.width=N; c.height=N;
+  var x2=c.getContext("2d",{willReadFrequently:true}); x2.fillStyle="#808080"; x2.fillRect(0,0,N,N);
+  x2.imageSmoothingEnabled=true; x2.imageSmoothingQuality="high";
+  x2.drawImage(src,half-d.x*k,half-d.y*k,src.width*k,src.height*k);
+  var g=blur3(blur3(grayOf(c,N,N),N,N),N,N), x, y, i;
+  var gx=new Float32Array(N*N),gy=new Float32Array(N*N),mg=new Float32Array(N*N),all=[];
+  for(y=1;y<N-1;y++) for(x=1;x<N-1;x++){
+    i=y*N+x;
+    var A=g[i-N-1],B=g[i-N],C=g[i-N+1],D=g[i-1],F=g[i+1],P=g[i+N-1],Q=g[i+N],Rr=g[i+N+1];
+    gx[i]=(C+2*F+Rr)-(A+2*D+P); gy[i]=(P+2*Q+Rr)-(A+2*B+C); mg[i]=Math.hypot(gx[i],gy[i]); all.push(mg[i]);
+  }
+  all.sort(function(a,b){return a-b;});
+  var thr=Math.max(28,all[Math.floor(all.length*0.86)]), pts=[];
+  for(y=2;y<N-2;y++) for(x=2;x<N-2;x++){
+    i=y*N+x; var m=mg[i]; if(m<thr) continue;
+    var ux=gx[i]/m, uy=gy[i]/m, sx=Math.round(ux), sy=Math.round(uy);
+    if(m<mg[i+sy*N+sx]||m<mg[i-sy*N-sx]) continue;
+    pts.push([(x-half)/half,(y-half)/half,ux,uy]);
   }
   if(pts.length<40) return null;
-  var f=fitCircle(pts); if(!f) return null;
-  var res=pts.map(function(p){return Math.abs(Math.hypot(p[0]-f.x,p[1]-f.y)-f.r);});
-  var srt=res.slice().sort(function(a,b){return a-b;}), med=srt[srt.length>>1], tol=Math.max(2,med*2.5);
-  var keep=pts.filter(function(p,i){return res[i]<=tol;});
-  if(keep.length>=40){var f2=fitCircle(keep); if(f2) f=f2;}
-  if(f.r<80||f.r>128||Math.hypot(f.x,f.y)>22) return null;
-  return {x:c0.x+f.x/k,y:c0.y+f.y/k,r:f.r/k};
+  var rnd=rng(1234567);
+  if(pts.length>1600){for(i=pts.length-1;i>0;i--){var j=Math.floor(rnd()*(i+1)),tm=pts[i];pts[i]=pts[j];pts[j]=tm;} pts.length=1600;}
+  var n=pts.length, rs=d.r*k/half, tol=1.3/half, best=null, cands=[];
+  function score(e){
+    var c0=Math.cos(e.t),s0=Math.sin(e.t),cnt=0,bins=0,mask=0;
+    for(var q=0;q<n;q++){
+      var p=pts[q],dx=p[0]-e.x,dy=p[1]-e.y,u=dx*c0+dy*s0,v=-dx*s0+dy*c0,rho=Math.hypot(u/e.a,v/e.b);
+      if(rho<1e-6) continue;
+      var dc=Math.hypot(dx,dy); if(dc*Math.abs(1-1/rho)>tol) continue;
+      var nu=u/(e.a*e.a),nv=v/(e.b*e.b),nx=nu*c0-nv*s0,ny=nu*s0+nv*c0,nn=Math.hypot(nx,ny);
+      if(Math.abs(nx*p[2]+ny*p[3])/nn<0.9) continue;
+      cnt++; mask|=1<<Math.floor(((Math.atan2(v/e.b,u/e.a)+Math.PI)/(2*Math.PI))*16)%16;
+    }
+    for(var b=0;b<16;b++) if(mask&(1<<b)) bins++;
+    return {cnt:cnt,bins:bins};
+  }
+  for(var it=0,IT=iters||3500;it<IT;it++){
+    var sel5=[]; while(sel5.length<5){var r=Math.floor(rnd()*n); if(sel5.indexOf(r)<0) sel5.push(r);}
+    var e=ellipseFit(sel5.map(function(q){return [pts[q][0],pts[q][1]];}));
+    if(!e) continue; e=normEll(e);
+    if(e.b/e.a<0.2||e.a>3*rs||e.b<0.35*rs||Math.hypot(e.x,e.y)>1.6*rs) continue;
+    var sc=score(e); if(sc.bins<12) continue;
+    var val=sc.cnt/Math.sqrt(e.a*e.b);
+    if(sc.cnt<0.5*Math.PI*(e.a+e.b)*half*0.35) continue;
+    e.cnt=sc.cnt; e.val=val; cands.push(e);
+    if(!best||sc.cnt>best.cnt) best=e;
+  }
+  if(!best) return null;
+  /* polish the winner with all its inliers */
+  for(var pass=0;pass<3;pass++){
+    var c1=Math.cos(best.t),s1=Math.sin(best.t),inl=[];
+    for(var q=0;q<n;q++){var p=pts[q],dx=p[0]-best.x,dy=p[1]-best.y,u=dx*c1+dy*s1,v=-dx*s1+dy*c1,rho=Math.hypot(u/best.a,v/best.b); if(rho>1e-6&&Math.hypot(dx,dy)*Math.abs(1-1/rho)<=tol*1.5) inl.push([p[0],p[1]]);}
+    if(inl.length<20) break;
+    var f=ellipseFit(inl); if(!f) break; f=normEll(f); f.cnt=best.cnt; best=f;
+  }
+  return normEll({x:d.x+best.x*half/k,y:d.y+best.y*half/k,a:best.a*half/k,b:best.b*half/k,t:best.t,rms:1});
+}
+/* Fit the coin from a rough circle. Two-metal coins (₹10, ₹20, €1, €2) have an inner ring:
+   after fitting whatever edge was found, look outward for a matching outer ring and use it. */
+function fitCoin(d){
+  var e=null, steps;
+  try{e=ransacEllipse(d);}catch(err){e=null;}
+  if(e){ steps=[[0.9,1.1],[0.94,1.06]]; }
+  else{
+    e=refineEllipse({x:d.x,y:d.y,a:d.r,b:d.r,t:0},0.6,1.6,"near");
+    if(!e) e=refineEllipse({x:d.x,y:d.y,a:d.r,b:d.r,t:0},0.6,1.6);
+    if(!e) return null;
+    steps=[[0.75,1.33,"near"],[0.82,1.2,"near"],[0.88,1.14,"near"],[0.9,1.1]];
+  }
+  for(var si=0;si<steps.length;si++){var e2=refineEllipse(e,steps[si][0],steps[si][1],steps[si][2]); if(e2) e=e2;}
+  for(var pass=0;pass<2;pass++){
+    var o=null; try{o=refineEllipse(e,1.1,2.0);}catch(err){o=null;}
+    if(!o) break;
+    var mi=Math.sqrt(e.a*e.b),mo=Math.sqrt(o.a*o.b),ri=e.b/e.a,ro=o.b/o.a;
+    var dt=Math.abs(Math.atan2(Math.sin(2*(o.t-e.t)),Math.cos(2*(o.t-e.t))))/2;
+    var ok=o.cover>=0.65&&o.rms/mo<0.012&&mo/mi>1.12&&mo/mi<1.95&&Math.abs(ro-ri)<0.12&&(ri>0.9||dt<12*DEG)&&Math.hypot(o.x-e.x,o.y-e.y)<0.12*mi;
+    if(!ok) break;
+    var o2=refineEllipse(o,0.9,1.1); if(o2){var o3=refineEllipse(o2,0.94,1.06); if(o3) o2=o3;} e=o2||o;
+  }
+  return e;
 }
 function findCoin(){
   setStatus("Looking for the coin…");
   setTimeout(function(){
-    var d=null; try{d=detectCoin();}catch(e){d=null;}
+    var d=null,e=null;
+    try{d=detectCoin();}catch(err){d=null;}
     if(d){
-      var f=null; try{f=refineCoin(d);}catch(e){f=null;}
-      var c=f||d; coin.x=c.x; coin.y=c.y; coin.r=c.r;
-      setStatus("Coin found. Check the gold circle sits on its edge, then start measuring.");
+      try{e=fitCoin(d);}catch(err){e=null;}
+      coin=e||{x:d.x,y:d.y,a:d.r,b:d.r,t:0,rms:1.5};
+      setStatus(coin.rms>0.7?"The oval fit looks rough. Zoom in and check it sits on the coin's outer edge.":"Coin found. Check the gold oval sits on its outer edge, then start measuring.");
     }else{
-      coin.x=src.width/2; coin.y=src.height/2; coin.r=Math.min(src.width,src.height)*0.08;
-      setStatus("Couldn't spot the coin. Drag the gold circle onto it.");
+      var r0=Math.min(src.width,src.height)*0.08;
+      coin={x:src.width/2,y:src.height/2,a:r0,b:r0,t:0,rms:1.5};
+      setStatus("Couldn't spot the coin. Drag the gold oval onto it.");
     }
-    draw(); refreshList();
+    updatePose(true); draw(); refreshList();
   },30);
 }
 
-/* ---------- steps and lists ---------- */
+/* ---------- steps, lists, perspective card ---------- */
 function setStep(s){
   step=s; $("coinTools").hidden=(s!=="coin"); $("measTools").hidden=(s!=="measure");
   draw(); refreshList();
 }
+function updatePersp(){
+  var s=cur(), t=s?s.th/DEG:0, p=$("tiltPill");
+  $("tiltDeg").firstChild.nodeValue=Math.round(t)+"°";
+  var cls="good",txt="Straight-on";
+  if(t>=3&&t<45){txt="Corrected";}
+  else if(t>=45&&t<62){cls="warn";txt="Steep, less accurate";}
+  else if(t>=62){cls="bad";txt="Too steep, retake";}
+  p.className="pill "+cls; p.textContent=txt;
+  if(!s||t<3){$("farTxt").textContent="Photo taken nearly straight on. No big correction needed.";}
+  else{
+    var fx=s.far[0],fy=s.far[1],side=Math.abs(fy)>=Math.abs(fx)?(fy<0?"top":"bottom"):(fx<0?"left":"right");
+    $("farTxt").textContent="Farther from the camera: "+side+" of the photo.";
+  }
+  $("btnFlip").disabled=!(pose.sols.length>1&&t>=3);
+  var a=$("lensAuto");
+  a.textContent=lens.from==="example"?"Example camera (26 mm)":(lens.exif?"From photo ("+lens.exif+" mm)":(lens.from==="live"?"Live camera, main lens (26 mm)":"Not in photo, using main camera (26 mm)"));
+}
 function refreshList(light){
-  var ul=$("mlist");
+  var ul=$("mlist"),i;
   if(light&&ul.children.length===lines.length){
-    for(var i=0;i<lines.length;i++) ul.children[i].querySelector(".len").textContent=fmt(lineMm(lines[i]));
+    for(i=0;i<lines.length;i++){var li=ul.children[i].querySelector(".len"); li.firstChild.nodeValue=fmt(lineMm(lines[i]))+" "; li.querySelector("small").textContent=fmtErr(lineErr(lines[i]));}
   }else{
     ul.textContent="";
     lines.forEach(function(l,i){
       var li=document.createElement("li");
       var n=document.createElement("span"); n.className="num"; n.style.background=COLORS[i%COLORS.length]; n.textContent=i+1;
-      var v=document.createElement("span"); v.className="len"; v.textContent=fmt(lineMm(l));
+      var v=document.createElement("span"); v.className="len"; v.appendChild(document.createTextNode(fmt(lineMm(l))+" "));
+      if(l.h){var tg=document.createElement("span"); tg.className="tag"; tg.textContent="height"; v.appendChild(tg);}
+      var sm=document.createElement("small"); sm.textContent=fmtErr(lineErr(l)); v.appendChild(sm);
       var b=document.createElement("button"); b.type="button"; b.className="small quiet"; b.textContent="Remove"; b.setAttribute("aria-label","Remove line "+(i+1));
       b.onclick=function(){lines.splice(i,1);sel=-1;draw();refreshList();};
       li.appendChild(n); li.appendChild(v); li.appendChild(b); ul.appendChild(li);
     });
   }
   $("mempty").hidden=lines.length>0;
-  var dpx=Math.round(coin.r*2), pct=Math.max(1,150/Math.max(1,coin.r*2));
-  $("acc").textContent="Coin is "+dpx+" px wide. Expect about ±"+(pct<10?pct.toFixed(1):pct.toFixed(0))+"%";
-  $("coinName").innerHTML="";
-  $("coinName").appendChild(document.createTextNode((ref.country?ref.country+" · ":"")+ref.name+" "));
-  var bEl=document.createElement("b"); bEl.textContent=ref.d+" mm"; $("coinName").appendChild(bEl);
+  $("acc").textContent="Coin "+Math.round(coin.a*2)+"×"+Math.round(coin.b*2)+" px · edge fit ±"+(coin.rms||1).toFixed(1)+" px";
+  var cn=$("coinName"); cn.textContent=(ref.country?ref.country+" · ":"")+ref.name+" ";
+  var bEl=document.createElement("b"); bEl.textContent=ref.d+" mm"; cn.appendChild(bEl);
 }
 function setUnit(u){
   unit=u; store.set("cr.unit",u);
@@ -637,21 +1052,73 @@ function setUnit(u){
 ["mm","cm","in"].forEach(function(x){$("u-"+x).onclick=function(){setUnit(x);};});
 
 $("btnAdd").onclick=function(){
-  var c=toImg(G.cw/2,G.ch/2), half=G.cw*0.22/S(), off=(lines.length%4)*26/S();
+  var c=toImg(G.cw/2,G.ch/2),half=G.cw*0.22/S(),off=(lines.length%4)*26/S();
   var y=Math.min(src.height-2,c[1]+off);
   lines.push({x1:Math.max(0,c[0]-half),y1:y,x2:Math.min(src.width,c[0]+half),y2:y});
   sel=lines.length-1; draw(); refreshList(); setStatus("Drag each end of the line onto the thing you're measuring.");
 };
-$("btnCoin").onclick=function(){setStep("coin");setStatus("Adjust the gold circle, then start measuring again.");};
+$("btnAddH").onclick=function(){
+  var so=cur(); if(!so){toast("Fit the coin first.");return;}
+  if(so.th<8*DEG) toast("Heights need a photo taken at an angle. Tilt the phone 20–50° for best results.");
+  var c=toImg(G.cw/2,G.ch*0.72), t=topFor(so,c[0],c[1],2*ref.d,pose.f);
+  if(!(t[2]>0)||!isFinite(t[0])){toast("Can't place a height here. Try a photo taken more at an angle.");return;}
+  lines.push({h:true,x1:c[0],y1:c[1],x2:t[0],y2:t[1]});
+  sel=lines.length-1; draw(); refreshList();
+  setStatus("Put the square where the object touches the table. Drag the round end to the top. It stays upright by itself.");
+};
+var snapOn=store.get("cr.snap",true);
+function snapPoint(x,y,dx,dy,outer){
+  var R=Math.max(4,Math.min(40,16/S())),P=Math.ceil(2*R+12),h=P/2;
+  var c=document.createElement("canvas"); c.width=P; c.height=P;
+  var x2=c.getContext("2d",{willReadFrequently:true}); x2.fillStyle="#808080"; x2.fillRect(0,0,P,P);
+  x2.drawImage(src,x-h,y-h,P,P,0,0,P,P);
+  var g=blur3(grayOf(c,P,P),P,P);
+  function smp(a,b){if(a<0||b<0||a>P-1.001||b>P-1.001) return -1; var xi=a|0,yi=b|0,fx=a-xi,fy=b-yi,j=yi*P+xi; return g[j]*(1-fx)*(1-fy)+g[j+1]*fx*(1-fy)+g[j+P]*(1-fx)*fy+g[j+P+1]*fx*fy;}
+  var prof=[],ts=[],mx=0,t;
+  for(t=-R;t<=R;t+=0.5){var a=smp(h+(t+1)*dx,h+(t+1)*dy),b=smp(h+(t-1)*dx,h+(t-1)*dy),gd=(a<0||b<0)?0:Math.abs(a-b)/2; prof.push(gd); ts.push(t); if(gd>mx) mx=gd;}
+  if(mx<5) return null;
+  var bi=-1,bs=0;
+  for(var i=1;i<prof.length-1;i++){
+    if(prof[i]<prof[i-1]||prof[i]<prof[i+1]||prof[i]<(outer?0.1:0.35)*mx) continue;
+    /* outer: the object's far end is the last edge going outward */
+    var sc=outer?ts[i]+R+1:prof[i]*(1-0.6*Math.abs(ts[i])/R); if(sc>bs){bs=sc;bi=i;}
+  }
+  if(bi<0) return null;
+  var y0=prof[bi-1],y1=prof[bi],y2=prof[bi+1],dd=y0-2*y1+y2,off=dd<0?Math.max(-0.5,Math.min(0.5,0.5*(y0-y2)/dd)):0;
+  var tb=ts[bi]+off*0.5;
+  return [x+tb*dx,y+tb*dy];
+}
+function snapEnd(i,w){
+  var l=lines[i]; if(!l||l.h||view.z>=3) return; /* zoomed in: trust the finger */
+  var dx=l.x2-l.x1,dy=l.y2-l.y1,n=Math.hypot(dx,dy); if(n<4) return;
+  dx/=n; dy/=n;
+  /* direction points outward from the line; a height's base keeps the nearest strong edge (table contact) */
+  var p=w===1?snapPoint(l.x1,l.y1,-dx,-dy,!l.h):snapPoint(l.x2,l.y2,dx,dy,true);
+  if(!p) return;
+  if(w===1){l.x1=p[0];l.y1=p[1];}else{l.x2=p[0];l.y2=p[1];}
+}
+function showSnap(){var b=$("btnSnap2");b.setAttribute("aria-pressed",String(snapOn));b.textContent="Snap line ends to edges: "+(snapOn?"On":"Off");}
+showSnap();
+$("btnSnap2").onclick=function(){snapOn=!snapOn;store.set("cr.snap",snapOn);showSnap();};
+$("btnCoin").onclick=function(){setStep("coin");setStatus("Adjust the gold oval, then start measuring again.");};
 $("btnOk").onclick=function(){setStep("measure"); if(!lines.length) $("btnAdd").onclick(); else setStatus("");};
 $("btnFind").onclick=findCoin;
 $("btnSnap").onclick=function(){
-  var f=null; try{f=refineCoin(coin);}catch(e){}
-  if(f){coin.x=f.x;coin.y=f.y;coin.r=f.r;draw();refreshList();setStatus("Snapped to the nearest round edge.");}
-  else setStatus("No clear edge near the circle. Move it closer to the coin and try again.");
+  var f=null; try{f=refineEllipse(coin,0.8,1.22);}catch(e){}
+  if(f){coin=f;updatePose(true);draw();refreshList();setStatus("Snapped to the coin's edge.");}
+  else setStatus("No clear edge near the oval. Move it closer to the coin and try again.");
 };
-$("btnSm").onclick=function(){coin.r=Math.max(4,coin.r-0.5/S());draw();refreshList(true);};
-$("btnBg").onclick=function(){coin.r+=0.5/S();draw();refreshList(true);};
+function scaleCoin(d){var k=1+d/(S()*coin.a);coin.a*=k;coin.b*=k;coin.rms=1;updatePose(true);draw();refreshList(true);}
+$("btnSm").onclick=function(){scaleCoin(-0.5);};
+$("btnBg").onclick=function(){scaleCoin(0.5);};
+$("btnFlip").onclick=function(){pose.flip=!pose.flip;updatePersp();draw();refreshList();};
+$("btnGrid").onclick=function(){showGrid=!showGrid;this.setAttribute("aria-pressed",String(showGrid));draw();};
+$("lensSel").addEventListener("change",function(){
+  var v=this.value;
+  if(v==="auto"){ if(lens.from==="example"){lens.mm=26;} else {lens.mm=lens.exif||26; lens.from=lens.exif?"photo":"default";} }
+  else {lens.mm=+v; if(lens.from!=="example") lens.from="manual";}
+  if(src){updatePose(true);draw();refreshList();}
+});
 
 /* ---------- coin picker ---------- */
 function pickCoin(country,name,d){
@@ -682,7 +1149,7 @@ function buildPicker(q){
   if(!shown){var p=document.createElement("p");p.className="empty";p.textContent="No match. Type the coin's width in mm below.";box.appendChild(p);}
 }
 $("btnPick").onclick=function(){
-  var p=$("picker"), open=p.hidden; p.hidden=!open;
+  var p=$("picker"),open=p.hidden; p.hidden=!open;
   this.setAttribute("aria-expanded",String(open)); this.textContent=open?"Close":"Change";
   if(open){$("coinSearch").value="";buildPicker("");}
 };
@@ -693,58 +1160,186 @@ $("btnCustom").onclick=function(){
   pickCoin("","Custom coin",Math.round(v*100)/100);
 };
 
-/* ---------- photos ---------- */
-function usePhoto(file){
-  if(!file) return;
-  var url=URL.createObjectURL(file), im=new Image();
+/* ---------- photos and lens info ---------- */
+function exifF35(buf){
+  var v=new DataView(buf); if(v.byteLength<4||v.getUint16(0)!==0xFFD8) return null;
+  var o=2;
+  while(o+4<v.byteLength){
+    var m=v.getUint16(o); if((m&0xFF00)!==0xFF00) return null;
+    var len=v.getUint16(o+2);
+    if(m===0xFFE1&&v.getUint32(o+4)===0x45786966) return tiffF35(v,o+10);
+    if(m===0xFFDA) break;
+    o+=2+len;
+  }
+  return null;
+}
+function tiffF35(v,t){
+  var le=v.getUint16(t)===0x4949;
+  function g16(p){return v.getUint16(p,le);} function g32(p){return v.getUint32(p,le);}
+  var ifd=t+g32(t+4),n=g16(ifd),exif=0,i,e;
+  for(i=0;i<n;i++){e=ifd+2+i*12; if(g16(e)===0x8769) exif=t+g32(e+8);}
+  if(!exif) return null;
+  n=g16(exif);
+  for(i=0;i<n;i++){e=exif+2+i*12; if(g16(e)===0xA405){var val=g16(e+8); return val>0?val:null;}}
+  return null;
+}
+function loadImage(file,exifMM,opt){
+  var url=URL.createObjectURL(file),im=new Image();
   im.onload=function(){
-    var k=Math.min(1,2400/Math.max(im.naturalWidth,im.naturalHeight));
+    var k=Math.min(1,3200/Math.max(im.naturalWidth,im.naturalHeight));
     var c=document.createElement("canvas"); c.width=Math.round(im.naturalWidth*k); c.height=Math.round(im.naturalHeight*k);
     c.getContext("2d").drawImage(im,0,0,c.width,c.height);
     URL.revokeObjectURL(url);
-    src=c; lines=[]; sel=-1; isExample=false; view={z:1,px:0,py:0}; $("exBadge").hidden=true; $("preview").hidden=true;
+    src=c; lines=[]; sel=-1; view={z:1,px:0,py:0}; pose.flip=false;
+    lens.exif=exifMM; lens.from=exifMM?"photo":(opt&&opt.live?"live":"default"); lens.mm=exifMM||26; $("lensSel").value="auto";
+    $("exBadge").hidden=true; $("preview").hidden=true;
     layout(); setStep("coin"); findCoin();
+    if(!exifMM&&!(opt&&opt.live)) toast("No lens info in this photo, so assuming the main camera. Change it under Perspective if needed.");
   };
   im.onerror=function(){URL.revokeObjectURL(url);toast("That file didn't open as a picture. Try another photo.");};
   im.src=url;
 }
-$("btnCam").onclick=function(){$("fileCam").click();};
+function usePhoto(file,opt){
+  if(!file) return;
+  if(window.__restore){ref=window.__restore;window.__restore=null;}
+  var p=file.arrayBuffer?file.arrayBuffer():Promise.reject();
+  p.then(function(buf){var m=null;try{m=exifF35(buf);}catch(e){m=null;}return (m>=8&&m<=400)?m:null;},function(){return null;})
+   .then(function(mm){loadImage(file,mm,opt);});
+}
+/* ---------- live camera with auto shot ---------- */
+var live={on:false,stream:null,track:null,timer:0,raf:0,det:null,hist:[],steady:0,auto:store.get("cr.auto",true),busy:false,denied:false};
+var liveCanvas=document.createElement("canvas");
+function liveSupported(){return !live.denied&&!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)&&window.isSecureContext!==false;}
+function openLive(){
+  $("live").hidden=false; document.body.style.overflow="hidden";
+  $("liveMsg").textContent="Starting camera…"; $("liveTilt").textContent=""; live.busy=false;
+  $("liveAuto").setAttribute("aria-pressed",String(live.auto));
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:3840},height:{ideal:2160}},audio:false})
+    .then(function(st){live.stream=st; live.track=st.getVideoTracks()[0]; var v=$("liveVid"); v.srcObject=st; return v.play();})
+    .then(function(){live.on=true; live.hist=[]; live.steady=0; live.det=null; liveLoop(); liveDraw();})
+    .catch(function(){closeLive(); live.denied=true; toast("Live camera isn't available here. Tap Take photo again to use your camera app.");});
+}
+function closeLive(){
+  live.on=false; clearTimeout(live.timer); cancelAnimationFrame(live.raf);
+  if(live.stream) live.stream.getTracks().forEach(function(t){t.stop();});
+  live.stream=null; live.track=null; $("liveVid").srcObject=null;
+  $("live").hidden=true; document.body.style.overflow="";
+}
+function liveLoop(){
+  if(!live.on) return;
+  var v=$("liveVid"),vw=v.videoWidth,vh=v.videoHeight,r=null;
+  if(vw&&vh&&!live.busy){
+    var k=480/Math.max(vw,vh); liveCanvas.width=Math.round(vw*k); liveCanvas.height=Math.round(vh*k);
+    liveCanvas.getContext("2d",{willReadFrequently:true}).drawImage(v,0,0,liveCanvas.width,liveCanvas.height);
+    var keep=src; src=liveCanvas;
+    try{
+      var d=detectCoin();
+      if(d){
+        var e=ransacEllipse(d,700);
+        if(e){
+          var e2=refineEllipse(e,0.9,1.1); if(e2) e=e2;
+          var f=26*1.25*Math.max(liveCanvas.width,liveCanvas.height)/43.267, sols=solvePose(e,f);
+          r={e:e,tilt:sols.length?sols[0].th/DEG:0,w:liveCanvas.width,h:liveCanvas.height};
+        }
+      }
+    }catch(err){r=null;}
+    src=keep;
+    live.det=r; liveJudge(r);
+  }
+  live.timer=setTimeout(liveLoop,180);
+}
+function liveJudge(r){
+  var msg,ready=false;
+  if(!r){live.hist=[]; msg="Looking for the coin…";}
+  else{
+    var sz=Math.sqrt(r.e.a*r.e.b)/Math.max(r.w,r.h);
+    live.hist.push(r); if(live.hist.length>4) live.hist.shift();
+    if(sz<0.035) msg="Move closer to the coin";
+    else if(r.tilt>58) msg="Too steep. Hold the phone more above";
+    else{
+      var st=live.hist.length>=3&&live.hist.every(function(q){return Math.hypot(q.e.x-r.e.x,q.e.y-r.e.y)<0.05*r.e.a&&Math.abs(q.e.a-r.e.a)<0.04*r.e.a;});
+      if(st){ready=true; msg=live.auto?"Hold steady…":"Ready. Tap the button";}
+      else msg="Hold steady";
+    }
+  }
+  live.steady=ready?live.steady+1:0;
+  $("liveMsg").textContent=msg;
+  $("liveTilt").textContent=r?"Tilt "+Math.round(r.tilt)+"°":"";
+  $("liveShot").style.setProperty("--p",live.auto?Math.min(1,live.steady/4):(ready?1:0));
+  if(live.auto&&live.steady>=4) liveCapture();
+}
+function liveDraw(){
+  if(!live.on) return;
+  var c=$("liveCv"),v=$("liveVid"),W=c.clientWidth,H=c.clientHeight,d=Math.min(window.devicePixelRatio||1,2);
+  if(c.width!==Math.round(W*d)||c.height!==Math.round(H*d)){c.width=Math.round(W*d);c.height=Math.round(H*d);}
+  var x=c.getContext("2d"); x.setTransform(d,0,0,d,0,0); x.clearRect(0,0,W,H);
+  var r=live.det,vw=v.videoWidth,vh=v.videoHeight;
+  if(r&&vw){
+    var s=Math.min(W/vw,H/vh),ox=(W-vw*s)/2,oy=(H-vh*s)/2,k=vw/r.w*s;
+    x.beginPath(); x.ellipse(ox+r.e.x*k,oy+r.e.y*k,r.e.a*k,r.e.b*k,r.e.t,0,2*Math.PI);
+    x.lineWidth=5; x.strokeStyle="rgba(0,0,0,.6)"; x.stroke();
+    x.lineWidth=3; x.strokeStyle=live.steady>0?"#5FD39A":"#FFC94A"; x.stroke();
+  }
+  live.raf=requestAnimationFrame(liveDraw);
+}
+function liveCapture(){
+  if(live.busy||!live.on) return;
+  live.busy=true; $("liveMsg").textContent="Taking photo…";
+  var v=$("liveVid");
+  function done(blob){
+    closeLive();
+    if(blob&&blob.size) usePhoto(new File([blob],"camera.jpg",{type:blob.type||"image/jpeg"}),{live:true});
+    else toast("Couldn't take the photo. Try again.");
+  }
+  function fromVideo(){
+    var c=document.createElement("canvas"); c.width=v.videoWidth; c.height=v.videoHeight;
+    c.getContext("2d").drawImage(v,0,0); c.toBlob(done,"image/jpeg",0.95);
+  }
+  if(window.ImageCapture&&live.track){
+    try{ new ImageCapture(live.track).takePhoto().then(done,fromVideo); }catch(e){ fromVideo(); }
+  }else fromVideo();
+}
+$("liveClose").onclick=closeLive;
+$("liveShot").onclick=liveCapture;
+$("liveAuto").onclick=function(){live.auto=!live.auto; store.set("cr.auto",live.auto); this.setAttribute("aria-pressed",String(live.auto)); live.steady=0;};
+document.addEventListener("keydown",function(e){if(e.key==="Escape"&&live.on) closeLive();});
+$("btnCam").onclick=function(){ if(liveSupported()) openLive(); else $("fileCam").click(); };
 $("btnGal").onclick=function(){$("fileGal").click();};
 $("fileCam").addEventListener("change",function(){usePhoto(this.files[0]);this.value="";});
 $("fileGal").addEventListener("change",function(){usePhoto(this.files[0]);this.value="";});
 
 /* ---------- saving ---------- */
 function exportCanvas(W){
-  W=Math.min(W,src.width); var s=W/src.width, H=Math.round(src.height*s);
+  W=Math.min(W,src.width); var s=W/src.width,H=Math.round(src.height*s);
   var c=document.createElement("canvas"); c.width=W; c.height=H;
   var keep=sel; sel=-1;
-  render(c.getContext("2d"),s,0,0,Math.max(0.8,W/430),W,H,{coinActive:false,lines:true,handles:false});
+  render(c.getContext("2d"),s,0,0,Math.max(0.8,W/430),W,H,{coinActive:false,lines:true,handles:false,grid:showGrid});
   sel=keep; return c;
 }
-var dl=null, lastFile=null;
+var dl=null,lastFile=null;
 function getDl(tries){
   if(window.claude&&typeof window.claude.use==="function"){
     window.claude.use("downloads").then(function(n){dl=n;}).catch(function(){});
   }else if(tries>0){setTimeout(function(){getDl(tries-1);},700);}
 }
-getDl(8);
+getDl(6);
 function stamp(){var d=new Date();function p(n){return (n<10?"0":"")+n;}return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+"-"+p(d.getHours())+p(d.getMinutes());}
 $("btnSave").onclick=function(){
   if(!lines.length){toast("Add a line first.");return;}
-  var c=exportCanvas(2000), name="coin-ruler-"+stamp()+".jpg";
+  var c=exportCanvas(2400),name="coin-ruler-"+stamp()+".jpg";
   c.toBlob(function(blob){
     if(!blob){toast("Couldn't make the picture. Try again.");return;}
     var url=URL.createObjectURL(blob);
     $("previewImg").src=url; $("preview").hidden=false;
     lastFile=null;
-    try{var f=new File([blob],name,{type:"image/jpeg"}); if(navigator.canShare&&navigator.canShare({files:[f]})){lastFile=f;}}catch(e){}
+    try{var f=new File([blob],name,{type:"image/jpeg"}); if(navigator.canShare&&navigator.canShare({files:[f]})) lastFile=f;}catch(e){}
     $("btnShare").hidden=!lastFile;
     if(dl){
       dl.save({filename:name,data:blob}).then(function(){toast("Saved "+name);})
         .catch(function(err){toast(err&&err.code==="declined"?"Save cancelled.":"Couldn't save here. Press and hold the picture below instead.");});
     }else{
       try{var a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();}catch(e){}
-      toast("Picture is ready below.");
+      toast("Saved. The picture is also shown below.");
     }
   },"image/jpeg",0.92);
 };
@@ -752,7 +1347,7 @@ function loadHist(){var h=store.get("cr.hist",[]);return Array.isArray(h)?h:[];}
 $("btnKeep").onclick=function(){
   if(!lines.length){toast("Add a line first.");return;}
   var h=loadHist();
-  h.unshift({t:Date.now(),coin:ref.name,d:ref.d,mm:lines.map(function(l){return Math.round(lineMm(l)*100)/100;}),img:exportCanvas(480).toDataURL("image/jpeg",0.72)});
+  h.unshift({t:Date.now(),coin:ref.name,d:ref.d,tilt:Math.round(tiltDeg()),mm:lines.map(function(l){return Math.round(lineMm(l)*100)/100;}),hk:lines.map(function(l){return !!l.h;}),img:exportCanvas(480).toDataURL("image/jpeg",0.72)});
   while(h.length>40) h.pop();
   var ok=store.set("cr.hist",h);
   while(!ok&&h.length>1){h.pop();ok=store.set("cr.hist",h);}
@@ -760,66 +1355,119 @@ $("btnKeep").onclick=function(){
   renderHistory();
 };
 function renderHistory(){
-  var h=loadHist(), box=$("hist"); box.textContent="";
+  var h=loadHist(),box=$("hist"); box.textContent="";
   $("hempty").hidden=h.length>0; $("hcount").textContent=h.length?h.length+" kept on this phone":"";
   h.forEach(function(it,i){
     var row=document.createElement("div"); row.className="h";
     var im=document.createElement("img"); im.src=it.img; im.alt="Kept photo";
-    var r=document.createElement("div");
-    var top=document.createElement("div"); top.className="top";
+    var r=document.createElement("div"),top=document.createElement("div"); top.className="top";
     var meta=document.createElement("div"); meta.className="meta";
     var d=new Date(it.t);
-    meta.textContent=d.toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})+", "+d.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"})+" · "+it.coin;
+    meta.textContent=d.toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})+", "+d.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"})+" · "+it.coin+(it.tilt>=3?" · tilt "+it.tilt+"°":"");
     var b=document.createElement("button"); b.type="button"; b.className="small quiet"; b.textContent="Delete";
     b.onclick=function(){var hh=loadHist();hh.splice(i,1);store.set("cr.hist",hh);renderHistory();};
     top.appendChild(meta); top.appendChild(b);
     var vals=document.createElement("div"); vals.className="vals";
-    vals.textContent=(it.mm||[]).map(function(m,j){return (j+1)+": "+fmt(m);}).join("   ");
+    vals.textContent=(it.mm||[]).map(function(m,j){return (j+1)+(it.hk&&it.hk[j]?" ↑":"")+": "+fmt(m);}).join("   ");
     r.appendChild(top); r.appendChild(vals); row.appendChild(im); row.appendChild(r); box.appendChild(row);
   });
 }
 
-/* ---------- example photo so the page opens working ---------- */
-function exampleScene(){
+/* ---------- example: a table photographed at an angle ---------- */
+function exampleFlat(){
   var W=1200,H=900,c=document.createElement("canvas"); c.width=W; c.height=H; var x=c.getContext("2d");
   var bg=x.createLinearGradient(0,0,W,H); bg.addColorStop(0,"#2F6F66"); bg.addColorStop(1,"#245850"); x.fillStyle=bg; x.fillRect(0,0,W,H);
-  x.strokeStyle="rgba(255,255,255,.07)"; x.lineWidth=1;
+  x.strokeStyle="rgba(255,255,255,.07)"; x.lineWidth=1.5;
   for(var i=50;i<W;i+=50){x.beginPath();x.moveTo(i,0);x.lineTo(i,H);x.stroke();}
   for(i=50;i<H;i+=50){x.beginPath();x.moveTo(0,i);x.lineTo(W,i);x.stroke();}
-  // coin: 27 mm at 5 px per mm
   var cx=255,cy=250,r=67.5;
-  x.beginPath(); x.arc(cx+5,cy+7,r+1,0,7); x.fillStyle="rgba(0,0,0,.28)"; x.fill();
+  x.beginPath(); x.arc(cx+4,cy+5,r+1,0,7); x.fillStyle="rgba(0,0,0,.22)"; x.fill();
   var g1=x.createRadialGradient(cx-20,cy-25,5,cx,cy,r); g1.addColorStop(0,"#F0D48A"); g1.addColorStop(1,"#B98C2E");
   x.beginPath(); x.arc(cx,cy,r,0,7); x.fillStyle=g1; x.fill();
   var g2=x.createRadialGradient(cx-12,cy-15,4,cx,cy,44); g2.addColorStop(0,"#F3F5F6"); g2.addColorStop(1,"#AEB5BA");
   x.beginPath(); x.arc(cx,cy,44,0,7); x.fillStyle=g2; x.fill();
   x.fillStyle="#6E767C"; x.font="700 46px 'Barlow Condensed',Arial,sans-serif"; x.textAlign="center"; x.textBaseline="middle"; x.fillText("10",cx,cy+3);
-  // pencil: 150 mm long, 7 mm wide
-  var ang=-12*Math.PI/180; x.save(); x.translate(330,650); x.rotate(ang);
-  x.fillStyle="rgba(0,0,0,.25)"; x.fillRect(42,-10,708,35);
+  var ang=-12*DEG; x.save(); x.translate(330,650); x.rotate(ang);
+  x.fillStyle="rgba(0,0,0,.22)"; x.fillRect(42,-12,708,33);
   x.beginPath(); x.moveTo(0,0); x.lineTo(42,-17.5); x.lineTo(42,17.5); x.closePath(); x.fillStyle="#E2C59B"; x.fill();
   x.beginPath(); x.moveTo(0,0); x.lineTo(13,-5.4); x.lineTo(13,5.4); x.closePath(); x.fillStyle="#2B2B2B"; x.fill();
   x.fillStyle="#F2B21B"; x.fillRect(42,-17.5,658,35); x.fillStyle="#D99A0C"; x.fillRect(42,5,658,12.5); x.fillStyle="#F8CB4E"; x.fillRect(42,-17.5,658,9);
   x.fillStyle="#B9C0C4"; x.fillRect(700,-17.5,22,35); x.fillStyle="#E08A8A"; x.fillRect(722,-17.5,28,35);
   x.restore();
-  var dx=Math.cos(ang), dy=Math.sin(ang);
-  return {canvas:c, coin:{x:cx,y:cy,r:r}, lines:[
-    {x1:330,y1:650,x2:330+750*dx,y2:650+750*dy},
-    {x1:330+640*dx+17.5*dy,y1:650+640*dy-17.5*dx,x2:330+640*dx-17.5*dy,y2:650+640*dy+17.5*dx}]};
+  return c;
+}
+/* Photographs a flat scene (5 px per mm) with a pinhole camera tilted by alphaDeg. */
+function tiltedShot(flat,opt){
+  var W=opt.W||1200,H=opt.H||900,f=(opt.lens||26)*Math.hypot(W,H)/43.267,cx=W/2,cy=H/2;
+  var al=opt.alpha*DEG,ca=Math.cos(al),sa=Math.sin(al),hc=opt.height,yaw=(opt.yaw||0)*DEG;
+  var X=[Math.cos(yaw),Math.sin(yaw),0],Fw=[-Math.sin(yaw),Math.cos(yaw),0];
+  var xa=X, za=[Fw[0]*sa,Fw[1]*sa,-ca], ya=[-Fw[0]*ca,-Fw[1]*ca,-sa];
+  var dist=hc/ca, C=[opt.look[0]-za[0]*dist,opt.look[1]-za[1]*dist,hc];
+  var fw=flat.width,fh=flat.height,fd=flat.getContext("2d").getImageData(0,0,fw,fh).data;
+  var out=document.createElement("canvas"); out.width=W; out.height=H;
+  var oc=out.getContext("2d"),img=oc.createImageData(W,H),od=img.data;
+  for(var v=0;v<H;v++) for(var u=0;u<W;u++){
+    var acc=[0,0,0];
+    for(var sy=0;sy<2;sy++) for(var sx=0;sx<2;sx++){
+      var dx=(u+0.25+sx*0.5-cx)/f,dy=(v+0.25+sy*0.5-cy)/f;
+      var d0=xa[0]*dx+ya[0]*dy+za[0],d1=xa[1]*dx+ya[1]*dy+za[1],d2=xa[2]*dx+ya[2]*dy+za[2],col;
+      if(d2>-1e-4){col=[30,40,46];}
+      else{
+        var s=-hc/d2,wx=C[0]+s*d0,wy=C[1]+s*d1,tx=wx*5,ty=fh-wy*5;
+        if(tx>=0&&ty>=0&&tx<fw-1&&ty<fh-1){
+          var xi=tx|0,yi=ty|0,fx=tx-xi,fy=ty-yi,j=(yi*fw+xi)*4;
+          col=[0,1,2].map(function(ch){return fd[j+ch]*(1-fx)*(1-fy)+fd[j+4+ch]*fx*(1-fy)+fd[j+fw*4+ch]*(1-fx)*fy+fd[j+fw*4+4+ch]*fx*fy;});
+        }else{
+          var gl=(Math.abs(((wx%10)+10)%10)<0.3||Math.abs(((wy%10)+10)%10)<0.3)?10:0;
+          col=[38+gl,90+gl,82+gl];
+        }
+      }
+      acc[0]+=col[0];acc[1]+=col[1];acc[2]+=col[2];
+    }
+    var o=(v*W+u)*4; od[o]=acc[0]/4; od[o+1]=acc[1]/4; od[o+2]=acc[2]/4; od[o+3]=255;
+  }
+  oc.putImageData(img,0,0);
+  function project(wx,wy,wz){
+    var p=[wx-C[0],wy-C[1],(wz||0)-C[2]];
+    var xc=p[0]*xa[0]+p[1]*xa[1]+p[2]*xa[2],yc=p[0]*ya[0]+p[1]*ya[1]+p[2]*ya[2],zc=p[0]*za[0]+p[1]*za[1]+p[2]*za[2];
+    return [cx+f*xc/zc,cy+f*yc/zc];
+  }
+  return {canvas:out,project:project};
+}
+function texToWorld(px,py){return [px/5,(900-py)/5];}
+function exampleScene(){
+  var shot=tiltedShot(exampleFlat(),{alpha:32,height:170,look:[120,95],lens:26});
+  var ang=-12*DEG,dx=Math.cos(ang),dy=Math.sin(ang);
+  function P(px,py){var w=texToWorld(px,py);return shot.project(w[0],w[1]);}
+  var a=P(330,650),b=P(330+750*dx,650+750*dy);
+  var m1=P(330+640*dx+17.5*dy,650+640*dy-17.5*dx),m2=P(330+640*dx-17.5*dy,650+640*dy+17.5*dx);
+  var ring=[];for(var i=0;i<64;i++){var q=i*Math.PI/32;ring.push(P(255+67.5*Math.cos(q),250+67.5*Math.sin(q)));}
+  /* a small box, 40 x 30 x 60 mm tall, standing on the table */
+  var X0=165,X1=205,Y0=120,Y1=150,Z=60,pr=shot.project,x=shot.canvas.getContext("2d");
+  function face(pts,col){x.beginPath();pts.forEach(function(q,j){var pp=pr(q[0],q[1],q[2]);if(j)x.lineTo(pp[0],pp[1]);else x.moveTo(pp[0],pp[1]);});x.closePath();x.fillStyle=col;x.fill();x.lineWidth=1.2;x.strokeStyle="rgba(60,35,10,.55)";x.stroke();}
+  face([[X0+4,Y0+3,0],[X1+6,Y0+3,0],[X1+6,Y1+8,0],[X0+4,Y1+8,0]],"rgba(0,0,0,.18)");
+  face([[X0,Y0,0],[X0,Y1,0],[X0,Y1,Z],[X0,Y0,Z]],"#A8743F");
+  face([[X0,Y0,0],[X1,Y0,0],[X1,Y0,Z],[X0,Y0,Z]],"#C98E52");
+  face([[X0,Y0,Z],[X1,Y0,Z],[X1,Y1,Z],[X0,Y1,Z]],"#E2B27A");
+  var hb=pr(X1,Y0,0),ht=pr(X1,Y0,Z);
+  return {canvas:shot.canvas,lines:[{x1:a[0],y1:a[1],x2:b[0],y2:b[1]},{x1:m1[0],y1:m1[1],x2:m2[0],y2:m2[1]},{h:true,x1:hb[0],y1:hb[1],x2:ht[0],y2:ht[1]}],ring:ring,truth:[150,7,60]};
+}
+function ringEllipse(ring){
+  var mx=0,my=0;ring.forEach(function(p){mx+=p[0];my+=p[1];});mx/=ring.length;my/=ring.length;
+  var sc=60,f=ellipseFit(ring.map(function(p){return [(p[0]-mx)/sc,(p[1]-my)/sc];}));
+  return normEll({x:mx+f.x*sc,y:my+f.y*sc,a:f.a*sc,b:f.b*sc,t:f.t,rms:0.5});
 }
 function boot(){
   var ex=exampleScene(); src=ex.canvas; lines=ex.lines; sel=-1;
-  var keepRef=ref; ref={country:"India",name:"₹10 (all years)",d:27};
-  coin.x=ex.coin.x; coin.y=ex.coin.y; coin.r=ex.coin.r;
-  var d=null; try{d=detectCoin(); if(d){d=refineCoin(d)||d;}}catch(e){d=null;}
-  window.__exDetect=d;
-  if(d&&Math.abs(d.r-ex.coin.r)/ex.coin.r<0.03&&Math.hypot(d.x-ex.coin.x,d.y-ex.coin.y)<4){coin.x=d.x;coin.y=d.y;coin.r=d.r;}
-  setUnit(unit); layout(); setStep("measure"); renderHistory();
-  setStatus("This is an example with a ₹10 coin and a pencil. Take your own photo to start.");
-  // the example always uses ₹10; your saved coin comes back with your first photo
-  window.__restore=keepRef;
+  window.__restore=ref; ref={country:"India",name:"₹10 (all years)",d:27};
+  lens={mm:26,from:"example",exif:null};
+  var truthE=ringEllipse(ex.ring), e=null;
+  try{var d=detectCoin(); if(d) e=fitCoin(d);}catch(err){e=null;}
+  window.__ex={detected:e,truth:truthE,truthLen:ex.truth};
+  coin=(e&&Math.hypot(e.x-truthE.x,e.y-truthE.y)<4&&Math.abs(e.a-truthE.a)<3)?e:truthE;
+  setUnit(unit); layout(); updatePose(true); setStep("measure"); renderHistory();
+  setStatus("Example: a pencil and a box photographed at an angle. The coin's oval gives the tilt, so even the box's height can be measured. Take your own photo to start.");
 }
-var _use=usePhoto; usePhoto=function(f){ if(f&&window.__restore){ref=window.__restore;window.__restore=null;} _use(f); };
 window.addEventListener("resize",layout);
 if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){if(src) draw();});}
 boot();
@@ -842,7 +1490,7 @@ $("btnInstall").onclick=function(){
 };
 $("btnNoInstall").onclick=function(){$("installBar").hidden=true;store.set("cr.noInstall",true);};
 window.addEventListener("appinstalled",function(){$("installBar").hidden=true;toast("Installed. Open Coin Ruler from your home screen.");});
-if("serviceWorker" in navigator && (location.protocol==="https:"||location.hostname==="localhost")){
+if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostname==="localhost")){
   window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){});});
 }
 </script>

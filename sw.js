@@ -1,5 +1,5 @@
 // Coin Ruler offline cache. Bump VERSION when files change.
-const VERSION = "coin-ruler-v1";
+const VERSION = "coin-ruler-v3";
 const CORE = [
   "./",
   "./index.html",
