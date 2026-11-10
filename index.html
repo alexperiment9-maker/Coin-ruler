@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Coin Ruler</title>
+<meta name="theme-color" content="#0E161B">
+<meta name="description" content="Measure things in a photo using a coin as the size reference.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Coin Ruler">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Layout: one phone-width column. Photo stage on top, tools under the thumb, records below. */
+  --bg:#EDF0F1; --surface:#FFFFFF; --ink:#15212A; --muted:#566772; --rule:#D2D9DE;
+  --brass:#C8922A; --brass-ink:#8A5A00; --on-brass:#1B1402; --stage:#0E161B; --danger:#B3261E;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F171C; --surface:#172229; --ink:#E7EDF0; --muted:#94A4AE; --rule:#2A3841;
+    --brass:#D9A53A; --brass-ink:#E6BA5C; --on-brass:#1B1402; --stage:#070C0F; --danger:#FF8A80;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F171C; --surface:#172229; --ink:#E7EDF0; --muted:#94A4AE; --rule:#2A3841;
+  --brass:#D9A53A; --brass-ink:#E6BA5C; --on-brass:#1B1402; --stage:#070C0F; --danger:#FF8A80;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;-webkit-text-size-adjust:100%}
+.app{max-width:560px;margin:0 auto;padding:calc(14px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));display:flex;flex-direction:column;gap:12px}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-family:var(--display);font-weight:700;font-size:30px;line-height:1;margin:0;letter-spacing:.01em;text-transform:uppercase}
+h1 span{color:var(--brass-ink)}
+h2{font-family:var(--display);font-weight:600;font-size:20px;line-height:1.1;margin:0;text-transform:uppercase;letter-spacing:.03em;text-wrap:balance}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;border-radius:10px;border:1px solid var(--rule);background:var(--surface);padding:10px 12px;font-weight:600;min-height:44px}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--brass-ink);outline-offset:2px}
+button.primary{background:var(--brass);border-color:var(--brass);color:var(--on-brass)}
+button.quiet{background:transparent}
+button.small{min-height:36px;padding:6px 10px;font-size:13px}
+.seg{display:flex;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;border-radius:0;min-height:36px;padding:6px 12px;font-family:var(--mono);font-size:13px;background:transparent}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:14px;padding:12px}
+.coinbar{display:flex;align-items:center;gap:12px}
+.coinbar .dot{flex:none;width:38px;height:38px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#F1D58A,var(--brass) 60%,#8A6417);border:1px solid rgba(0,0,0,.25)}
+.coinbar .txt{flex:1;min-width:0}
+.eyebrow{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.coinname{font-weight:600;overflow-wrap:anywhere}
+.coinname b{font-family:var(--mono);font-weight:500;color:var(--brass-ink)}
+#picker{display:flex;flex-direction:column;gap:10px}
+#picker[hidden]{display:none}
+#coinSearch,#customMm{width:100%;border:1px solid var(--rule);border-radius:10px;padding:10px 12px;background:var(--bg);min-height:44px}
+.custom{display:flex;gap:8px;align-items:center}
+.custom input{flex:1}
+#countries{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto;padding-right:2px}
+details{border:1px solid var(--rule);border-radius:10px;padding:0 10px}
+summary{cursor:pointer;padding:10px 0;font-weight:600;display:flex;justify-content:space-between;gap:8px}
+summary small{color:var(--muted);font-weight:400}
+.chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 0 10px}
+.chip{min-height:40px;padding:6px 10px;font-weight:500;font-size:13px;text-align:left}
+.chip b{font-family:var(--mono);font-weight:500;color:var(--brass-ink);margin-left:6px}
+.hint{font-size:13px;color:var(--muted);margin:0}
+.stagewrap{position:relative;border-radius:14px;overflow:hidden;background:var(--stage);border:1px solid var(--rule)}
+#cv{display:block;width:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+.badge{position:absolute;left:10px;bottom:10px;background:rgba(10,16,20,.8);color:#F2D58A;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:4px 8px;border-radius:6px;pointer-events:none}
+.zoom{position:absolute;right:8px;bottom:8px;display:flex;gap:6px}
+.zoom button{min-height:38px;width:38px;padding:0;background:rgba(10,16,20,.8);color:#fff;border-color:rgba(255,255,255,.25);font-family:var(--mono)}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.row>button{flex:1 1 auto}
+.shoot{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#status{font-size:13px;color:var(--muted);min-height:20px;margin:0}
+.tools{display:flex;flex-direction:column;gap:8px}
+.tools[hidden]{display:none}
+#mlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+#mlist li{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--rule)}
+#mlist li:first-child{border-top:0}
+.num{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:12px;color:#0B1114;font-weight:600}
+.len{flex:1;font-family:var(--mono);font-size:18px;font-variant-numeric:tabular-nums}
+.empty{color:var(--muted);font-size:13px;margin:0}
+.headrow{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px}
+.acc{font-size:12px;color:var(--muted)}
+ol.tips{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:13px;display:flex;flex-direction:column;gap:3px}
+#hist{display:flex;flex-direction:column;gap:10px}
+.h{display:grid;grid-template-columns:104px 1fr;gap:10px;align-items:start;border-top:1px solid var(--rule);padding-top:10px}
+.h:first-child{border-top:0;padding-top:0}
+.h img{width:104px;height:78px;object-fit:cover;border-radius:8px;display:block;background:var(--stage)}
+.h .meta{font-size:12px;color:var(--muted)}
+.h .vals{font-family:var(--mono);font-size:14px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.h .top{display:flex;justify-content:space-between;gap:8px;align-items:start}
+#preview{display:flex;flex-direction:column;gap:8px}
+#preview[hidden]{display:none}
+#preview img{max-width:100%;border-radius:10px;display:block}
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:10px;font-size:14px;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgba(0,0,0,.25);z-index:5}
+#toast[hidden]{display:none}
+#installBar{display:flex;align-items:center;gap:10px;background:var(--ink);color:var(--bg);border-radius:12px;padding:8px 8px 8px 14px}
+#installBar[hidden]{display:none}
+#installBar span{flex:1;font-size:14px}
+#installBar button{min-height:38px;padding:6px 12px}
+.prow{display:flex;gap:8px;flex-wrap:wrap}
+.prow button{flex:1 1 auto}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Coin <span>Ruler</span></h1>
+    <div class="seg" role="group" aria-label="Units">
+      <button type="button" id="u-mm" data-u="mm">mm</button>
+      <button type="button" id="u-cm" data-u="cm">cm</button>
+      <button type="button" id="u-in" data-u="in">in</button>
+    </div>
+  </header>
+
+  <div id="installBar" hidden>
+    <span>Add Coin Ruler to your home screen</span>
+    <button type="button" class="primary" id="btnInstall">Install</button>
+    <button type="button" class="quiet small" id="btnNoInstall" aria-label="Hide install message" style="color:inherit;border-color:transparent">✕</button>
+  </div>
+
+  <section class="card" aria-label="Reference coin">
+    <div class="coinbar">
+      <div class="dot" aria-hidden="true"></div>
+      <div class="txt">
+        <div class="eyebrow">Coin in the photo</div>
+        <div class="coinname" id="coinName"></div>
+      </div>
+      <button type="button" id="btnPick" class="small" aria-expanded="false" aria-controls="picker">Change</button>
+    </div>
+    <div id="picker" hidden>
+      <hr style="border:0;border-top:1px solid var(--rule);width:100%;margin:12px 0 0">
+      <label class="vh" for="coinSearch">Search country or coin</label>
+      <input id="coinSearch" type="search" placeholder="Search country or coin" autocomplete="off">
+      <div id="countries"></div>
+      <div>
+        <label class="eyebrow" for="customMm">Coin not listed? Type its width in mm</label>
+        <div class="custom" style="margin-top:6px">
+          <input id="customMm" type="number" inputmode="decimal" min="5" max="60" step="0.01" placeholder="e.g. 24.5">
+          <button type="button" id="btnCustom">Use</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="shoot">
+    <button type="button" class="primary" id="btnCam">Take photo</button>
+    <button type="button" id="btnGal">Pick from gallery</button>
+    <input class="vh" id="fileCam" type="file" accept="image/*" capture="environment" tabindex="-1" aria-hidden="true">
+    <input class="vh" id="fileGal" type="file" accept="image/*" tabindex="-1" aria-hidden="true">
+  </div>
+
+  <div class="stagewrap" id="stage">
+    <canvas id="cv" aria-label="Photo with coin circle and measuring lines"></canvas>
+    <div class="badge" id="exBadge">Example photo</div>
+    <div class="zoom">
+      <button type="button" id="zOut" aria-label="Zoom out">−</button>
+      <button type="button" id="zIn" aria-label="Zoom in">+</button>
+    </div>
+  </div>
+  <p id="status" role="status"></p>
+
+  <div class="tools" id="coinTools" hidden>
+    <p class="hint">Make the gold circle sit exactly on the coin's edge. Drag inside it to move, drag the round handle to resize. Pinch to zoom.</p>
+    <div class="row">
+      <button type="button" id="btnFind">Find coin again</button>
+      <button type="button" id="btnSnap">Snap to edge</button>
+      <button type="button" id="btnSm" aria-label="Circle smaller">Smaller</button>
+      <button type="button" id="btnBg" aria-label="Circle bigger">Bigger</button>
+    </div>
+    <button type="button" class="primary" id="btnOk">Circle fits the coin. Start measuring</button>
+  </div>
+
+  <div class="tools" id="measTools" hidden>
+    <div class="row">
+      <button type="button" class="primary" id="btnAdd">Add line</button>
+      <button type="button" id="btnCoin">Adjust coin</button>
+    </div>
+    <div class="row">
+      <button type="button" id="btnSave">Save photo with sizes</button>
+      <button type="button" id="btnKeep">Keep in history</button>
+    </div>
+  </div>
+
+  <section class="card" aria-label="Measurements">
+    <div class="headrow"><h2>Measurements</h2><span class="acc" id="acc"></span></div>
+    <ul id="mlist"></ul>
+    <p class="empty" id="mempty" hidden>No lines yet. Tap Add line, then drag each end onto the thing you want to measure.</p>
+  </section>
+
+  <section class="card" id="preview" hidden aria-label="Saved picture">
+    <h2>Your picture</h2>
+    <p class="hint" id="previewHint">Saved to your Downloads. You can also press and hold the picture to save it.</p>
+    <img id="previewImg" alt="Photo with measurements drawn on it">
+    <div class="prow"><button type="button" id="btnShare" hidden>Share or save to gallery</button></div>
+  </section>
+
+  <section class="card" aria-label="How to get accurate sizes">
+    <h2>For accurate sizes</h2>
+    <ol class="tips">
+      <li>Lay the coin flat, right next to the object, on the same surface.</li>
+      <li>Hold the phone straight above, not at an angle.</li>
+      <li>Works for flat things. A tall object looks bigger than it is because its top is closer to the camera.</li>
+      <li>Fill the frame. A bigger coin in the photo gives a better reading.</li>
+    </ol>
+  </section>
+
+  <section class="card" aria-label="History">
+    <div class="headrow"><h2>History</h2><span class="acc" id="hcount"></span></div>
+    <div id="hist"></div>
+    <p class="empty" id="hempty" hidden>Nothing kept yet. History stays on this phone only.</p>
+  </section>
+</div>
+<div id="toast" role="status" hidden></div>
+
+<script>
+"use strict";
+/* ---------- Coin sizes: [name, diameter in mm] ---------- */
+var DB = [
+ {c:"India", hint:"Any ₹10 coin is 27 mm, so it is the safest pick. ₹1, ₹2 and ₹5 changed size over the years, so match the year on your coin.", coins:[
+  ["₹10 (all years)",27],["₹20 (12-sided)",27],
+  ["₹5 (2019 onward)",25],["₹5 (before 2019)",23],
+  ["₹2 (2019 onward)",23],["₹2 (2011 to 2018)",25],["₹2 (2005 to 2010)",27],["₹2 (1992 to 2004, 11-sided)",26],
+  ["₹1 (2019 onward)",20],["₹1 (2011 to 2018)",22],["₹1 (before 2011)",25],
+  ["50 paise (2011 onward)",19],["50 paise (before 2011)",22]]},
+ {c:"Australia", coins:[["5 cents",19.41],["10 cents",23.6],["20 cents",28.65],["50 cents (12-sided)",31.65],["$1",25],["$2",20.5]]},
+ {c:"Brazil", coins:[["5 centavos",22],["10 centavos",20],["25 centavos",25],["50 centavos",23],["R$1",27]]},
+ {c:"Canada", coins:[["5 cents",21.2],["10 cents",18.03],["25 cents",23.88],["$1 loonie",26.5],["$2 toonie",28]]},
+ {c:"China", coins:[["1 jiao",19],["5 jiao",20.5],["1 yuan (2019 onward)",22.25],["1 yuan (1999 to 2018)",25]]},
+ {c:"Czech Republic", coins:[["1 Kč",20],["2 Kč",21.5],["5 Kč",23],["10 Kč",24.5],["20 Kč",26],["50 Kč",27.5]]},
+ {c:"Denmark", coins:[["50 øre",21.5],["1 krone",20.25],["2 kroner",24.5],["5 kroner",28.5],["10 kroner",23.35],["20 kroner",27]]},
+ {c:"Eurozone (Euro)", hint:"Same sizes in every euro country: Germany, France, Italy, Spain, Netherlands, Belgium, Austria, Portugal, Ireland, Greece, Finland, Croatia, Bulgaria and more.", coins:[["1 cent",16.25],["2 cent",18.75],["5 cent",21.25],["10 cent",19.75],["20 cent",22.25],["50 cent",24.25],["€1",23.25],["€2",25.75]]},
+ {c:"Hong Kong", coins:[["10 cents",17.5],["50 cents",22.5],["$1",25.5],["$2 (wavy edge)",28],["$5",27],["$10",24]]},
+ {c:"Hungary", coins:[["5 forint",21.2],["10 forint",24.8],["20 forint",26.3],["50 forint",27.4],["100 forint",23.8],["200 forint",28.3]]},
+ {c:"Indonesia", coins:[["Rp 100",23],["Rp 200",25],["Rp 500",27],["Rp 1000",24.1]]},
+ {c:"Bangladesh", coins:[["5 taka (2012 onward)",25.5],["5 taka (1994 to 2008, 12-sided)",26.8]]},
+ {c:"Chile", coins:[["10 pesos",21],["50 pesos",25],["100 pesos",23.5],["500 pesos",26]]},
+ {c:"Colombia", coins:[["50 pesos (2012 onward)",17],["100 pesos (2012 onward)",20.3],["200 pesos (2012 onward)",22.4],["500 pesos (2012 onward)",23.7],["1000 pesos",26.7]]},
+ {c:"Iceland", coins:[["1 króna",21.5],["5 krónur",24.5],["10 krónur",27.5],["50 krónur",23],["100 krónur",25.5]]},
+ {c:"Israel", coins:[["10 agorot",22],["½ shekel",26],["1 shekel",18],["2 shekels",21.6],["5 shekels",24],["10 shekels",23]]},
+ {c:"Japan", coins:[["¥1",20],["¥5",22],["¥10",23.5],["¥50",21],["¥100",22.6],["¥500",26.5]]},
+ {c:"Malaysia", coins:[["5 sen",17.78],["10 sen",18.8],["20 sen",20.6],["50 sen",22.65]]},
+ {c:"Mexico", coins:[["50 centavos (2009 onward)",17],["$1",21],["$2",23],["$5",25.5],["$10",28]]},
+ {c:"Nepal", coins:[["Rs 1 (brass)",20],["Rs 2 (1996 onward)",25]]},
+ {c:"New Zealand", coins:[["10 cents",20.5],["20 cents",21.75],["50 cents",24.75],["$1",23],["$2",26.5]]},
+ {c:"Norway", coins:[["1 krone",21],["5 kroner",26],["10 kroner",24],["20 kroner",27.5]]},
+ {c:"Pakistan", coins:[["Rs 1",20],["Rs 2",22.5],["Rs 5 (2015 onward)",18.5],["Rs 10",25.5]]},
+ {c:"Peru", coins:[["10 céntimos",20.5],["20 céntimos",23],["50 céntimos",22],["1 sol",25.5],["2 soles",22.3],["5 soles",24.3]]},
+ {c:"Philippines", coins:[["25 sentimo",20],["₱1",23],["₱5",25],["₱10",27],["₱20",30]]},
+ {c:"Poland", coins:[["1 grosz",15.5],["2 grosze",17.5],["5 groszy",19.5],["10 groszy",16.5],["20 groszy",18.5],["50 groszy",20.5],["1 złoty",23],["2 złote",21.5],["5 złotych",24]]},
+ {c:"Romania", coins:[["1 ban",16.75],["5 bani",18.25],["10 bani",20.5],["50 bani",23.75]]},
+ {c:"Russia", coins:[["1 ruble",20.5],["2 rubles",23],["5 rubles",25],["10 rubles",22]]},
+ {c:"Saudi Arabia", coins:[["1 halala (2016 onward)",16],["1 riyal (2016 onward)",23],["2 riyals (2016 onward)",25]]},
+ {c:"Singapore", coins:[["5 cents",16.75],["10 cents",18.5],["20 cents",21],["50 cents",23],["$1",24.65]]},
+ {c:"South Africa", coins:[["10 cents",16],["20 cents",19],["50 cents",22],["R1",20],["R2",23],["R5",26]]},
+ {c:"South Korea", coins:[["₩10 (2006 onward)",18],["₩50",21.6],["₩100",24],["₩500",26.5]]},
+ {c:"Sri Lanka", coins:[["Rs 1 (2017 onward)",20],["Rs 2 (2017 onward)",22],["Rs 5 (2017 onward)",23.5],["Rs 10 (11-sided)",26.4]]},
+ {c:"Sweden", coins:[["1 krona",19.5],["2 kronor",22.5],["5 kronor",23.75],["10 kronor",20.5]]},
+ {c:"Switzerland", coins:[["5 rappen",17.15],["10 rappen",19.15],["20 rappen",21.05],["½ franc",18.2],["1 franc",23.2],["2 francs",27.4],["5 francs",31.45]]},
+ {c:"Taiwan", coins:[["NT$1",20],["NT$5",22],["NT$10",26],["NT$50",28]]},
+ {c:"Thailand", coins:[["25 satang",16],["50 satang",18],["1 baht",20],["2 baht",21.75],["5 baht",24],["10 baht",26]]},
+ {c:"Turkey", coins:[["5 kuruş",17.5],["10 kuruş",18.5],["25 kuruş",20.5],["50 kuruş",23.85],["1 lira",26.15]]},
+ {c:"United Arab Emirates", coins:[["25 fils",20],["50 fils (7-sided)",21],["1 dirham",24]]},
+ {c:"United Kingdom", coins:[["1p",20.3],["2p",25.9],["5p",18],["10p",24.5],["20p (7-sided)",21.4],["50p (7-sided)",27.3],["£1 (12-sided)",23.2],["£2",28.4]]},
+ {c:"United States", coins:[["Penny 1¢",19.05],["Nickel 5¢",21.21],["Dime 10¢",17.91],["Quarter 25¢",24.26],["Half dollar",30.61],["Dollar coin",26.49]]}
+];
+
+/* ---------- helpers ---------- */
+function $(id){return document.getElementById(id);}
+var store={
+  get:function(k,d){try{var v=localStorage.getItem(k);return v==null?d:JSON.parse(v);}catch(e){return d;}},
+  set:function(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true;}catch(e){return false;}}
+};
+var toastT=0;
+function toast(msg){var t=$("toast");t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(function(){t.hidden=true;},3600);}
+function setStatus(s){$("status").textContent=s;}
+var COLORS=["#FFD400","#3DE0FF","#FF7ADB","#9BFF5C","#FF9A3D","#C7B8FF"];
+
+/* ---------- state ---------- */
+var cv=$("cv"), ctx=cv.getContext("2d");
+var src=null;                      // full photo, on a canvas
+var coin={x:0,y:0,r:10,a:Math.PI/4};
+var lines=[], sel=-1, step="measure", isExample=true;
+var unit=store.get("cr.unit","mm");
+var ref=store.get("cr.coin",{country:"India",name:"₹10 (all years)",d:27});
+if(!ref||!(ref.d>0)) ref={country:"India",name:"₹10 (all years)",d:27};
+var view={z:1,px:0,py:0}, G={cw:300,ch:200,fit:1};
+var loupe=null;                    // {x,y} image point being dragged
+
+function mmPerPx(){return ref.d/(2*coin.r);}
+function fmt(mm){
+  if(unit==="cm") return (mm/10).toFixed(2)+" cm";
+  if(unit==="in") return (mm/25.4).toFixed(2)+" in";
+  return (mm>=1000?mm.toFixed(0):mm.toFixed(1))+" mm";
+}
+function lineMm(l){return Math.hypot(l.x2-l.x1,l.y2-l.y1)*mmPerPx();}
+
+/* ---------- view geometry ---------- */
+function S(){return G.fit*view.z;}
+function clampView(){
+  var s=S(), w=src.width*s, h=src.height*s;
+  view.px = w<=G.cw ? (G.cw-w)/2 : Math.min(0,Math.max(G.cw-w,view.px));
+  view.py = h<=G.ch ? (G.ch-h)/2 : Math.min(0,Math.max(G.ch-h,view.py));
+}
+function toScr(x,y){var s=S();return [view.px+x*s, view.py+y*s];}
+function toImg(x,y){var s=S();return [(x-view.px)/s,(y-view.py)/s];}
+function layout(){
+  if(!src) return;
+  var cw=$("stage").clientWidth||320;
+  var maxH=Math.max(260,Math.min(520,Math.round(window.innerHeight*0.6)));
+  var ch=Math.min(Math.round(cw*src.height/src.width),maxH);
+  var dpr=Math.min(window.devicePixelRatio||1,3);
+  cv.style.height=ch+"px"; cv.width=Math.round(cw*dpr); cv.height=Math.round(ch*dpr);
+  G.cw=cw; G.ch=ch; G.dpr=dpr; G.fit=Math.min(cw/src.width,ch/src.height);
+  clampView(); draw();
+}
+function zoomAt(f,sx,sy){
+  var p=toImg(sx,sy), z=Math.max(1,Math.min(12,view.z*f));
+  view.z=z; var s=S(); view.px=sx-p[0]*s; view.py=sy-p[1]*s; clampView(); draw();
+}
+
+/* ---------- drawing (shared by screen and saved picture) ---------- */
+function strokeBoth(c,col,w,u){c.lineWidth=(w+2.5)*u;c.strokeStyle="rgba(8,12,15,.85)";c.stroke();c.lineWidth=w*u;c.strokeStyle=col;c.stroke();}
+function pill(c,text,x,y,col,u,W,H){
+  c.font="600 "+Math.round(13*u)+"px 'IBM Plex Sans',system-ui,sans-serif";
+  var tw=c.measureText(text).width, pw=tw+14*u, ph=22*u;
+  x=Math.max(pw/2+3*u,Math.min(W-pw/2-3*u,x)); y=Math.max(ph/2+3*u,Math.min(H-ph/2-3*u,y));
+  c.fillStyle="rgba(8,12,15,.86)";
+  c.beginPath(); rr(c,x-pw/2,y-ph/2,pw,ph,6*u); c.fill();
+  c.fillStyle=col; c.textAlign="center"; c.textBaseline="middle"; c.fillText(text,x,y+0.5*u);
+}
+function rr(c,x,y,w,h,r){c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+function render(c,s,ox,oy,u,W,H,o){
+  c.imageSmoothingQuality="high";
+  c.drawImage(src,ox,oy,src.width*s,src.height*s);
+  var gold="#FFC94A";
+  // coin
+  var cx=ox+coin.x*s, cy=oy+coin.y*s, cr=coin.r*s;
+  c.beginPath(); c.arc(cx,cy,cr,0,Math.PI*2);
+  if(o.coinActive){strokeBoth(c,gold,2,u);} else {c.setLineDash([6*u,5*u]); strokeBoth(c,gold,1.5,u); c.setLineDash([]);}
+  if(o.coinActive){
+    c.beginPath(); c.moveTo(cx-7*u,cy); c.lineTo(cx+7*u,cy); c.moveTo(cx,cy-7*u); c.lineTo(cx,cy+7*u); strokeBoth(c,gold,1.5,u);
+    var hx=cx+Math.cos(coin.a)*cr, hy=cy+Math.sin(coin.a)*cr;
+    c.beginPath(); c.arc(hx,hy,9*u,0,Math.PI*2); c.fillStyle=gold; c.fill(); c.lineWidth=2*u; c.strokeStyle="rgba(8,12,15,.85)"; c.stroke();
+  }
+  pill(c,ref.name.replace(/\s*\(.*\)$/,"")+" = "+fmt(ref.d),cx,cy-cr-16*u,gold,u,W,H);
+  if(!o.lines) return;
+  for(var i=0;i<lines.length;i++){
+    var l=lines[i], col=COLORS[i%COLORS.length];
+    var x1=ox+l.x1*s,y1=oy+l.y1*s,x2=ox+l.x2*s,y2=oy+l.y2*s;
+    c.beginPath(); c.moveTo(x1,y1); c.lineTo(x2,y2); strokeBoth(c,col,i===sel&&o.handles?2.5:2,u);
+    var ends=[[x1,y1],[x2,y2]];
+    for(var e=0;e<2;e++){
+      var ex=ends[e][0], ey=ends[e][1];
+      if(o.handles){
+        c.beginPath(); c.arc(ex,ey,11*u,0,Math.PI*2); strokeBoth(c,col,1.5,u);
+        c.beginPath(); c.arc(ex,ey,1.6*u,0,Math.PI*2); c.fillStyle=col; c.fill();
+      }else{
+        var dx=x2-x1, dy=y2-y1, n=Math.hypot(dx,dy)||1, nx=-dy/n*7*u, ny=dx/n*7*u;
+        c.beginPath(); c.moveTo(ex-nx,ey-ny); c.lineTo(ex+nx,ey+ny); strokeBoth(c,col,2,u);
+      }
+    }
+    var mx=(x1+x2)/2,my=(y1+y2)/2,dx2=x2-x1,dy2=y2-y1,nn=Math.hypot(dx2,dy2)||1;
+    var px=-dy2/nn, py=dx2/nn; if(py>0){px=-px;py=-py;}
+    pill(c,(i+1)+"  "+fmt(lineMm(l)),mx+px*20*u,my+py*20*u,col,u,W,H);
+  }
+}
+function draw(){
+  if(!src) return;
+  var d=G.dpr||1; ctx.setTransform(d,0,0,d,0,0);
+  ctx.fillStyle="#0A1014"; ctx.fillRect(0,0,G.cw,G.ch);
+  render(ctx,S(),view.px,view.py,1,G.cw,G.ch,{coinActive:step==="coin",lines:step==="measure",handles:true});
+  if(loupe) drawLoupe();
+}
+function drawLoupe(){
+  var R=58, p=toScr(loupe.x,loupe.y);
+  var lx=(p[0]<G.cw/2 && p[1]<R*2+40)? G.cw-R-10 : R+10, ly=R+10;
+  var m=Math.max(S()*2.6,1.2);
+  ctx.save(); ctx.beginPath(); ctx.arc(lx,ly,R,0,Math.PI*2); ctx.clip();
+  ctx.fillStyle="#0A1014"; ctx.fillRect(lx-R,ly-R,2*R,2*R);
+  ctx.imageSmoothingEnabled=true;
+  ctx.drawImage(src,lx-loupe.x*m,ly-loupe.y*m,src.width*m,src.height*m);
+  if(step==="coin"){
+    ctx.beginPath(); ctx.arc(lx+(coin.x-loupe.x)*m,ly+(coin.y-loupe.y)*m,coin.r*m,0,Math.PI*2);
+    ctx.lineWidth=3.5; ctx.strokeStyle="rgba(8,12,15,.8)"; ctx.stroke(); ctx.lineWidth=1.5; ctx.strokeStyle="#FFC94A"; ctx.stroke();
+  }
+  ctx.beginPath(); ctx.moveTo(lx-R,ly); ctx.lineTo(lx-6,ly); ctx.moveTo(lx+6,ly); ctx.lineTo(lx+R,ly);
+  ctx.moveTo(lx,ly-R); ctx.lineTo(lx,ly-6); ctx.moveTo(lx,ly+6); ctx.lineTo(lx,ly+R);
+  ctx.lineWidth=3; ctx.strokeStyle="rgba(8,12,15,.7)"; ctx.stroke(); ctx.lineWidth=1; ctx.strokeStyle="#fff"; ctx.stroke();
+  ctx.restore();
+  ctx.beginPath(); ctx.arc(lx,ly,R,0,Math.PI*2); ctx.lineWidth=3; ctx.strokeStyle="#FFC94A"; ctx.stroke();
+}
+
+/* ---------- touch and mouse ---------- */
+var ptrs=new Map(), drag=null, pinch=null;
+function pos(e){var r=cv.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top];}
+function hit(p){
+  var s=S(), i, best=null, bd=30;
+  if(step==="measure"){
+    for(i=0;i<lines.length;i++){
+      var l=lines[i], a=toScr(l.x1,l.y1), b=toScr(l.x2,l.y2);
+      var da=Math.hypot(p[0]-a[0],p[1]-a[1]), db=Math.hypot(p[0]-b[0],p[1]-b[1]);
+      if(da<bd){bd=da;best={k:"end",i:i,w:1,dx:a[0]-p[0],dy:a[1]-p[1]};}
+      if(db<bd){bd=db;best={k:"end",i:i,w:2,dx:b[0]-p[0],dy:b[1]-p[1]};}
+    }
+    if(best){sel=best.i;return best;}
+  }else{
+    var c=toScr(coin.x,coin.y), cr=coin.r*s;
+    var hx=c[0]+Math.cos(coin.a)*cr, hy=c[1]+Math.sin(coin.a)*cr;
+    var dc=Math.hypot(p[0]-c[0],p[1]-c[1]);
+    if(Math.hypot(p[0]-hx,p[1]-hy)<30 || Math.abs(dc-cr)<14) return {k:"rim",off:cr-dc};
+    if(dc<Math.max(cr,30)) return {k:"coin",dx:c[0]-p[0],dy:c[1]-p[1]};
+  }
+  return {k:"pan",sx:p[0],sy:p[1],px:view.px,py:view.py};
+}
+function applyDrag(p){
+  var q;
+  if(drag.k==="end"){
+    q=toImg(p[0]+drag.dx,p[1]+drag.dy);
+    q[0]=Math.max(0,Math.min(src.width,q[0])); q[1]=Math.max(0,Math.min(src.height,q[1]));
+    var l=lines[drag.i]; if(drag.w===1){l.x1=q[0];l.y1=q[1];}else{l.x2=q[0];l.y2=q[1];}
+    loupe={x:q[0],y:q[1]};
+  }else if(drag.k==="rim"){
+    var c=toScr(coin.x,coin.y), dc=Math.hypot(p[0]-c[0],p[1]-c[1]);
+    coin.a=Math.atan2(p[1]-c[1],p[0]-c[0]); coin.r=Math.max(4,(dc+drag.off)/S());
+    loupe={x:coin.x+Math.cos(coin.a)*coin.r,y:coin.y+Math.sin(coin.a)*coin.r};
+  }else if(drag.k==="coin"){
+    q=toImg(p[0]+drag.dx,p[1]+drag.dy); coin.x=q[0]; coin.y=q[1];
+    loupe={x:coin.x+Math.cos(coin.a)*coin.r,y:coin.y+Math.sin(coin.a)*coin.r};
+  }else if(drag.k==="pan"){
+    view.px=drag.px+p[0]-drag.sx; view.py=drag.py+p[1]-drag.sy; clampView();
+  }
+}
+function pinchInfo(){
+  var a=[]; ptrs.forEach(function(v){a.push(v);});
+  return {d:Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1])||1, mx:(a[0][0]+a[1][0])/2, my:(a[0][1]+a[1][1])/2};
+}
+cv.addEventListener("pointerdown",function(e){
+  try{cv.setPointerCapture(e.pointerId);}catch(_){}
+  var p=pos(e); ptrs.set(e.pointerId,p);
+  if(ptrs.size===2){drag=null;loupe=null;var i=pinchInfo();pinch={d:i.d,z:view.z,img:toImg(i.mx,i.my)};draw();return;}
+  if(ptrs.size>2) return;
+  drag=hit(p); if(drag.k!=="pan") applyDrag(p); draw(); e.preventDefault();
+});
+cv.addEventListener("pointermove",function(e){
+  if(!ptrs.has(e.pointerId)) return;
+  var p=pos(e); ptrs.set(e.pointerId,p);
+  if(pinch&&ptrs.size>=2){
+    var i=pinchInfo(); view.z=Math.max(1,Math.min(12,pinch.z*i.d/pinch.d));
+    var s=S(); view.px=i.mx-pinch.img[0]*s; view.py=i.my-pinch.img[1]*s; clampView(); draw(); return;
+  }
+  if(!drag) return; applyDrag(p); draw();
+  if(drag.k!=="pan") refreshList(true);
+});
+function endPtr(e){
+  ptrs.delete(e.pointerId); if(ptrs.size<2) pinch=null;
+  if(ptrs.size===0){drag=null;loupe=null;refreshList();}
+  draw();
+}
+cv.addEventListener("pointerup",endPtr); cv.addEventListener("pointercancel",endPtr);
+cv.addEventListener("wheel",function(e){e.preventDefault();var p=pos(e);zoomAt(e.deltaY<0?1.2:1/1.2,p[0],p[1]);},{passive:false});
+$("zIn").onclick=function(){zoomAt(1.5,G.cw/2,G.ch/2);};
+$("zOut").onclick=function(){zoomAt(1/1.5,G.cw/2,G.ch/2);};
+
+/* ---------- finding the coin ---------- */
+function grayOf(c,w,h){
+  var d=c.getContext("2d",{willReadFrequently:true}).getImageData(0,0,w,h).data, g=new Float32Array(w*h);
+  for(var i=0,j=0;i<g.length;i++,j+=4) g[i]=0.299*d[j]+0.587*d[j+1]+0.114*d[j+2];
+  return g;
+}
+function blur3(g,w,h){
+  var o=new Float32Array(w*h), x,y;
+  for(y=0;y<h;y++) for(x=0;x<w;x++){
+    var s=0,n=0;
+    for(var yy=y-1;yy<=y+1;yy++){ if(yy<0||yy>=h) continue; for(var xx=x-1;xx<=x+1;xx++){ if(xx<0||xx>=w) continue; s+=g[yy*w+xx]; n++; } }
+    o[y*w+x]=s/n;
+  }
+  return o;
+}
+function detectCoin(){
+  var k=Math.min(1,320/Math.max(src.width,src.height));
+  var w=Math.max(8,Math.round(src.width*k)), h=Math.max(8,Math.round(src.height*k)), wh=w*h;
+  var c=document.createElement("canvas"); c.width=w; c.height=h;
+  c.getContext("2d",{willReadFrequently:true}).drawImage(src,0,0,w,h);
+  var g=blur3(grayOf(c,w,h),w,h), x,y,i;
+  var gx=new Float32Array(wh), gy=new Float32Array(wh), mag=new Float32Array(wh), hist=new Uint32Array(1024);
+  for(y=1;y<h-1;y++) for(x=1;x<w-1;x++){
+    i=y*w+x;
+    var a=g[i-w-1],b=g[i-w],cc=g[i-w+1],d=g[i-1],f=g[i+1],p=g[i+w-1],q=g[i+w],r=g[i+w+1];
+    gx[i]=(cc+2*f+r)-(a+2*d+p); gy[i]=(p+2*q+r)-(a+2*b+cc);
+    mag[i]=Math.hypot(gx[i],gy[i]); hist[Math.min(1023,mag[i]|0)]++;
+  }
+  var need=wh*0.13, acc0=0, thr=1023; while(thr>24&&acc0<need){acc0+=hist[thr];thr--;}
+  var md=Math.min(w,h), rmin=Math.max(6,Math.round(md*0.025)), rmax=Math.max(rmin+2,Math.round(md*0.32)), nr=rmax-rmin+1;
+  var acc=new Uint16Array(nr*wh);
+  for(y=1;y<h-1;y++) for(x=1;x<w-1;x++){
+    i=y*w+x; var m=mag[i]; if(m<thr) continue;
+    var ux=gx[i]/m, uy=gy[i]/m;
+    for(var ri=0;ri<nr;ri++){
+      var rad=rmin+ri, base=ri*wh;
+      var ax=Math.round(x+rad*ux), ay=Math.round(y+rad*uy);
+      if(ax>=0&&ax<w&&ay>=0&&ay<h) acc[base+ay*w+ax]++;
+      ax=Math.round(x-rad*ux); ay=Math.round(y-rad*uy);
+      if(ax>=0&&ax<w&&ay>=0&&ay<h) acc[base+ay*w+ax]++;
+    }
+  }
+  function sc(ri,x,y){
+    if(x<1||y<1||x>=w-1||y>=h-1||ri<0||ri>=nr) return 0;
+    var j=ri*wh+y*w+x;
+    var s=acc[j-w-1]+acc[j-w]+acc[j-w+1]+acc[j-1]+acc[j]+acc[j+1]+acc[j+w-1]+acc[j+w]+acc[j+w+1];
+    if(ri>0) s+=acc[j-wh]; if(ri<nr-1) s+=acc[j+wh];
+    return s/(rmin+ri);
+  }
+  var best=0,bx=0,by=0,bri=0;
+  for(var ri2=0;ri2<nr;ri2++){
+    var rad2=rmin+ri2, lo=rad2*0.9, base2=ri2*wh;
+    for(y=1;y<h-1;y++) for(x=1;x<w-1;x++){
+      if(acc[base2+y*w+x]<lo) continue;
+      var v=sc(ri2,x,y); if(v>best){best=v;bx=x;by=y;bri=ri2;}
+    }
+  }
+  if(best<4.2) return null;
+  // a two-metal coin has an inner ring: prefer the outer edge when it is nearly as strong
+  var lim=Math.min(nr-1,Math.round((rmin+bri)*1.7)-rmin);
+  for(var r3=lim;r3>bri+1;r3--){
+    var bb=0,ox=0,oy=0;
+    for(var yy=-2;yy<=2;yy++) for(var xx=-2;xx<=2;xx++){var t=sc(r3,bx+xx,by+yy); if(t>bb){bb=t;ox=bx+xx;oy=by+yy;}}
+    if(bb>=best*0.62){bx=ox;by=oy;bri=r3;break;}
+  }
+  return {x:(bx+0.5)/k,y:(by+0.5)/k,r:(rmin+bri)/k,score:best};
+}
+function fitCircle(pts){
+  var n=pts.length,sx=0,sy=0,sxx=0,syy=0,sxy=0,sxz=0,syz=0,sz=0,i;
+  for(i=0;i<n;i++){var x=pts[i][0],y=pts[i][1],z=x*x+y*y;sx+=x;sy+=y;sxx+=x*x;syy+=y*y;sxy+=x*y;sxz+=x*z;syz+=y*z;sz+=z;}
+  var det=sxx*(syy*n-sy*sy)-sxy*(sxy*n-sy*sx)+sx*(sxy*sy-syy*sx);
+  if(Math.abs(det)<1e-9) return null;
+  var b1=-sxz,b2=-syz,b3=-sz;
+  var A=(b1*(syy*n-sy*sy)-sxy*(b2*n-sy*b3)+sx*(b2*sy-syy*b3))/det;
+  var B=(sxx*(b2*n-sy*b3)-b1*(sxy*n-sy*sx)+sx*(sxy*b3-b2*sx))/det;
+  var C=(sxx*(syy*b3-b2*sy)-sxy*(sxy*b3-b2*sx)+b1*(sxy*sy-syy*sx))/det;
+  var cx=-A/2, cy=-B/2, rr2=cx*cx+cy*cy-C; if(!(rr2>0)) return null;
+  return {x:cx,y:cy,r:Math.sqrt(rr2)};
+}
+function refineCoin(c0){
+  var N=280, half=N/2, k=100/c0.r;
+  var c=document.createElement("canvas"); c.width=N; c.height=N;
+  var x2=c.getContext("2d",{willReadFrequently:true}); x2.fillStyle="#808080"; x2.fillRect(0,0,N,N);
+  x2.imageSmoothingQuality="high";
+  x2.drawImage(src,half-c0.x*k,half-c0.y*k,src.width*k,src.height*k);
+  var g=blur3(blur3(grayOf(c,N,N),N,N),N,N);
+  function smp(x,y){
+    if(x<0||y<0||x>N-1.001||y>N-1.001) return -1;
+    var xi=x|0, yi=y|0, fx=x-xi, fy=y-yi, j=yi*N+xi;
+    return g[j]*(1-fx)*(1-fy)+g[j+1]*fx*(1-fy)+g[j+N]*(1-fx)*fy+g[j+N+1]*fx*fy;
+  }
+  var pts=[];
+  for(var a=0;a<120;a++){
+    var th=a*Math.PI/60, cs=Math.cos(th), sn=Math.sin(th), prof=[], mx=0;
+    for(var r=78;r<=130;r++){
+      var v1=smp(half+(r+2)*cs,half+(r+2)*sn), v0=smp(half+(r-2)*cs,half+(r-2)*sn);
+      var gd=(v1<0||v0<0)?0:Math.abs(v1-v0); prof.push(gd); if(gd>mx) mx=gd;
+    }
+    if(mx<7) continue;
+    var pick=-1;
+    for(var j2=prof.length-1;j2>=0;j2--){ if(prof[j2]>=0.6*mx){pick=j2;break;} }
+    while(pick>0&&prof[pick-1]>prof[pick]) pick--;
+    var rp=78+pick; pts.push([(rp)*cs,(rp)*sn]);
+  }
+  if(pts.length<40) return null;
+  var f=fitCircle(pts); if(!f) return null;
+  var res=pts.map(function(p){return Math.abs(Math.hypot(p[0]-f.x,p[1]-f.y)-f.r);});
+  var srt=res.slice().sort(function(a,b){return a-b;}), med=srt[srt.length>>1], tol=Math.max(2,med*2.5);
+  var keep=pts.filter(function(p,i){return res[i]<=tol;});
+  if(keep.length>=40){var f2=fitCircle(keep); if(f2) f=f2;}
+  if(f.r<80||f.r>128||Math.hypot(f.x,f.y)>22) return null;
+  return {x:c0.x+f.x/k,y:c0.y+f.y/k,r:f.r/k};
+}
+function findCoin(){
+  setStatus("Looking for the coin…");
+  setTimeout(function(){
+    var d=null; try{d=detectCoin();}catch(e){d=null;}
+    if(d){
+      var f=null; try{f=refineCoin(d);}catch(e){f=null;}
+      var c=f||d; coin.x=c.x; coin.y=c.y; coin.r=c.r;
+      setStatus("Coin found. Check the gold circle sits on its edge, then start measuring.");
+    }else{
+      coin.x=src.width/2; coin.y=src.height/2; coin.r=Math.min(src.width,src.height)*0.08;
+      setStatus("Couldn't spot the coin. Drag the gold circle onto it.");
+    }
+    draw(); refreshList();
+  },30);
+}
+
+/* ---------- steps and lists ---------- */
+function setStep(s){
+  step=s; $("coinTools").hidden=(s!=="coin"); $("measTools").hidden=(s!=="measure");
+  draw(); refreshList();
+}
+function refreshList(light){
+  var ul=$("mlist");
+  if(light&&ul.children.length===lines.length){
+    for(var i=0;i<lines.length;i++) ul.children[i].querySelector(".len").textContent=fmt(lineMm(lines[i]));
+  }else{
+    ul.textContent="";
+    lines.forEach(function(l,i){
+      var li=document.createElement("li");
+      var n=document.createElement("span"); n.className="num"; n.style.background=COLORS[i%COLORS.length]; n.textContent=i+1;
+      var v=document.createElement("span"); v.className="len"; v.textContent=fmt(lineMm(l));
+      var b=document.createElement("button"); b.type="button"; b.className="small quiet"; b.textContent="Remove"; b.setAttribute("aria-label","Remove line "+(i+1));
+      b.onclick=function(){lines.splice(i,1);sel=-1;draw();refreshList();};
+      li.appendChild(n); li.appendChild(v); li.appendChild(b); ul.appendChild(li);
+    });
+  }
+  $("mempty").hidden=lines.length>0;
+  var dpx=Math.round(coin.r*2), pct=Math.max(1,150/Math.max(1,coin.r*2));
+  $("acc").textContent="Coin is "+dpx+" px wide. Expect about ±"+(pct<10?pct.toFixed(1):pct.toFixed(0))+"%";
+  $("coinName").innerHTML="";
+  $("coinName").appendChild(document.createTextNode((ref.country?ref.country+" · ":"")+ref.name+" "));
+  var bEl=document.createElement("b"); bEl.textContent=ref.d+" mm"; $("coinName").appendChild(bEl);
+}
+function setUnit(u){
+  unit=u; store.set("cr.unit",u);
+  ["mm","cm","in"].forEach(function(x){$("u-"+x).setAttribute("aria-pressed",String(x===u));});
+  if(src){draw();refreshList();renderHistory();}
+}
+["mm","cm","in"].forEach(function(x){$("u-"+x).onclick=function(){setUnit(x);};});
+
+$("btnAdd").onclick=function(){
+  var c=toImg(G.cw/2,G.ch/2), half=G.cw*0.22/S(), off=(lines.length%4)*26/S();
+  var y=Math.min(src.height-2,c[1]+off);
+  lines.push({x1:Math.max(0,c[0]-half),y1:y,x2:Math.min(src.width,c[0]+half),y2:y});
+  sel=lines.length-1; draw(); refreshList(); setStatus("Drag each end of the line onto the thing you're measuring.");
+};
+$("btnCoin").onclick=function(){setStep("coin");setStatus("Adjust the gold circle, then start measuring again.");};
+$("btnOk").onclick=function(){setStep("measure"); if(!lines.length) $("btnAdd").onclick(); else setStatus("");};
+$("btnFind").onclick=findCoin;
+$("btnSnap").onclick=function(){
+  var f=null; try{f=refineCoin(coin);}catch(e){}
+  if(f){coin.x=f.x;coin.y=f.y;coin.r=f.r;draw();refreshList();setStatus("Snapped to the nearest round edge.");}
+  else setStatus("No clear edge near the circle. Move it closer to the coin and try again.");
+};
+$("btnSm").onclick=function(){coin.r=Math.max(4,coin.r-0.5/S());draw();refreshList(true);};
+$("btnBg").onclick=function(){coin.r+=0.5/S();draw();refreshList(true);};
+
+/* ---------- coin picker ---------- */
+function pickCoin(country,name,d){
+  ref={country:country,name:name,d:d}; store.set("cr.coin",ref);
+  $("picker").hidden=true; $("btnPick").setAttribute("aria-expanded","false"); $("btnPick").textContent="Change";
+  draw(); refreshList();
+}
+function buildPicker(q){
+  q=(q||"").trim().toLowerCase();
+  var box=$("countries"); box.textContent=""; var shown=0;
+  DB.forEach(function(g,gi){
+    var cm=g.c.toLowerCase().indexOf(q)>=0;
+    var list=g.coins.filter(function(c){return !q||cm||c[0].toLowerCase().indexOf(q)>=0;});
+    if(!list.length) return; shown++;
+    var d=document.createElement("details"); if(q||gi===0||g.c===ref.country) d.open=true;
+    var s=document.createElement("summary"); s.appendChild(document.createTextNode(g.c));
+    var sm=document.createElement("small"); sm.textContent=g.coins.length+" coins"; s.appendChild(sm); d.appendChild(s);
+    if(g.hint){var h=document.createElement("p");h.className="hint";h.style.margin="0 0 8px";h.textContent=g.hint;d.appendChild(h);}
+    var ch=document.createElement("div"); ch.className="chips";
+    list.forEach(function(c){
+      var b=document.createElement("button"); b.type="button"; b.className="chip";
+      b.appendChild(document.createTextNode(c[0])); var mm=document.createElement("b"); mm.textContent=c[1]+" mm"; b.appendChild(mm);
+      b.onclick=function(){pickCoin(g.c,c[0],c[1]);};
+      ch.appendChild(b);
+    });
+    d.appendChild(ch); box.appendChild(d);
+  });
+  if(!shown){var p=document.createElement("p");p.className="empty";p.textContent="No match. Type the coin's width in mm below.";box.appendChild(p);}
+}
+$("btnPick").onclick=function(){
+  var p=$("picker"), open=p.hidden; p.hidden=!open;
+  this.setAttribute("aria-expanded",String(open)); this.textContent=open?"Close":"Change";
+  if(open){$("coinSearch").value="";buildPicker("");}
+};
+$("coinSearch").addEventListener("input",function(){buildPicker(this.value);});
+$("btnCustom").onclick=function(){
+  var v=parseFloat($("customMm").value);
+  if(!(v>=5&&v<=60)){toast("Type a width between 5 and 60 mm.");return;}
+  pickCoin("","Custom coin",Math.round(v*100)/100);
+};
+
+/* ---------- photos ---------- */
+function usePhoto(file){
+  if(!file) return;
+  var url=URL.createObjectURL(file), im=new Image();
+  im.onload=function(){
+    var k=Math.min(1,2400/Math.max(im.naturalWidth,im.naturalHeight));
+    var c=document.createElement("canvas"); c.width=Math.round(im.naturalWidth*k); c.height=Math.round(im.naturalHeight*k);
+    c.getContext("2d").drawImage(im,0,0,c.width,c.height);
+    URL.revokeObjectURL(url);
+    src=c; lines=[]; sel=-1; isExample=false; view={z:1,px:0,py:0}; $("exBadge").hidden=true; $("preview").hidden=true;
+    layout(); setStep("coin"); findCoin();
+  };
+  im.onerror=function(){URL.revokeObjectURL(url);toast("That file didn't open as a picture. Try another photo.");};
+  im.src=url;
+}
+$("btnCam").onclick=function(){$("fileCam").click();};
+$("btnGal").onclick=function(){$("fileGal").click();};
+$("fileCam").addEventListener("change",function(){usePhoto(this.files[0]);this.value="";});
+$("fileGal").addEventListener("change",function(){usePhoto(this.files[0]);this.value="";});
+
+/* ---------- saving ---------- */
+function exportCanvas(W){
+  W=Math.min(W,src.width); var s=W/src.width, H=Math.round(src.height*s);
+  var c=document.createElement("canvas"); c.width=W; c.height=H;
+  var keep=sel; sel=-1;
+  render(c.getContext("2d"),s,0,0,Math.max(0.8,W/430),W,H,{coinActive:false,lines:true,handles:false});
+  sel=keep; return c;
+}
+var dl=null, lastFile=null;
+function getDl(tries){
+  if(window.claude&&typeof window.claude.use==="function"){
+    window.claude.use("downloads").then(function(n){dl=n;}).catch(function(){});
+  }else if(tries>0){setTimeout(function(){getDl(tries-1);},700);}
+}
+getDl(8);
+function stamp(){var d=new Date();function p(n){return (n<10?"0":"")+n;}return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+"-"+p(d.getHours())+p(d.getMinutes());}
+$("btnSave").onclick=function(){
+  if(!lines.length){toast("Add a line first.");return;}
+  var c=exportCanvas(2000), name="coin-ruler-"+stamp()+".jpg";
+  c.toBlob(function(blob){
+    if(!blob){toast("Couldn't make the picture. Try again.");return;}
+    var url=URL.createObjectURL(blob);
+    $("previewImg").src=url; $("preview").hidden=false;
+    lastFile=null;
+    try{var f=new File([blob],name,{type:"image/jpeg"}); if(navigator.canShare&&navigator.canShare({files:[f]})){lastFile=f;}}catch(e){}
+    $("btnShare").hidden=!lastFile;
+    if(dl){
+      dl.save({filename:name,data:blob}).then(function(){toast("Saved "+name);})
+        .catch(function(err){toast(err&&err.code==="declined"?"Save cancelled.":"Couldn't save here. Press and hold the picture below instead.");});
+    }else{
+      try{var a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();}catch(e){}
+      toast("Picture is ready below.");
+    }
+  },"image/jpeg",0.92);
+};
+function loadHist(){var h=store.get("cr.hist",[]);return Array.isArray(h)?h:[];}
+$("btnKeep").onclick=function(){
+  if(!lines.length){toast("Add a line first.");return;}
+  var h=loadHist();
+  h.unshift({t:Date.now(),coin:ref.name,d:ref.d,mm:lines.map(function(l){return Math.round(lineMm(l)*100)/100;}),img:exportCanvas(480).toDataURL("image/jpeg",0.72)});
+  while(h.length>40) h.pop();
+  var ok=store.set("cr.hist",h);
+  while(!ok&&h.length>1){h.pop();ok=store.set("cr.hist",h);}
+  toast(ok?"Kept in history.":"This phone's storage is blocked, so history can't be kept here.");
+  renderHistory();
+};
+function renderHistory(){
+  var h=loadHist(), box=$("hist"); box.textContent="";
+  $("hempty").hidden=h.length>0; $("hcount").textContent=h.length?h.length+" kept on this phone":"";
+  h.forEach(function(it,i){
+    var row=document.createElement("div"); row.className="h";
+    var im=document.createElement("img"); im.src=it.img; im.alt="Kept photo";
+    var r=document.createElement("div");
+    var top=document.createElement("div"); top.className="top";
+    var meta=document.createElement("div"); meta.className="meta";
+    var d=new Date(it.t);
+    meta.textContent=d.toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})+", "+d.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"})+" · "+it.coin;
+    var b=document.createElement("button"); b.type="button"; b.className="small quiet"; b.textContent="Delete";
+    b.onclick=function(){var hh=loadHist();hh.splice(i,1);store.set("cr.hist",hh);renderHistory();};
+    top.appendChild(meta); top.appendChild(b);
+    var vals=document.createElement("div"); vals.className="vals";
+    vals.textContent=(it.mm||[]).map(function(m,j){return (j+1)+": "+fmt(m);}).join("   ");
+    r.appendChild(top); r.appendChild(vals); row.appendChild(im); row.appendChild(r); box.appendChild(row);
+  });
+}
+
+/* ---------- example photo so the page opens working ---------- */
+function exampleScene(){
+  var W=1200,H=900,c=document.createElement("canvas"); c.width=W; c.height=H; var x=c.getContext("2d");
+  var bg=x.createLinearGradient(0,0,W,H); bg.addColorStop(0,"#2F6F66"); bg.addColorStop(1,"#245850"); x.fillStyle=bg; x.fillRect(0,0,W,H);
+  x.strokeStyle="rgba(255,255,255,.07)"; x.lineWidth=1;
+  for(var i=50;i<W;i+=50){x.beginPath();x.moveTo(i,0);x.lineTo(i,H);x.stroke();}
+  for(i=50;i<H;i+=50){x.beginPath();x.moveTo(0,i);x.lineTo(W,i);x.stroke();}
+  // coin: 27 mm at 5 px per mm
+  var cx=255,cy=250,r=67.5;
+  x.beginPath(); x.arc(cx+5,cy+7,r+1,0,7); x.fillStyle="rgba(0,0,0,.28)"; x.fill();
+  var g1=x.createRadialGradient(cx-20,cy-25,5,cx,cy,r); g1.addColorStop(0,"#F0D48A"); g1.addColorStop(1,"#B98C2E");
+  x.beginPath(); x.arc(cx,cy,r,0,7); x.fillStyle=g1; x.fill();
+  var g2=x.createRadialGradient(cx-12,cy-15,4,cx,cy,44); g2.addColorStop(0,"#F3F5F6"); g2.addColorStop(1,"#AEB5BA");
+  x.beginPath(); x.arc(cx,cy,44,0,7); x.fillStyle=g2; x.fill();
+  x.fillStyle="#6E767C"; x.font="700 46px 'Barlow Condensed',Arial,sans-serif"; x.textAlign="center"; x.textBaseline="middle"; x.fillText("10",cx,cy+3);
+  // pencil: 150 mm long, 7 mm wide
+  var ang=-12*Math.PI/180; x.save(); x.translate(330,650); x.rotate(ang);
+  x.fillStyle="rgba(0,0,0,.25)"; x.fillRect(42,-10,708,35);
+  x.beginPath(); x.moveTo(0,0); x.lineTo(42,-17.5); x.lineTo(42,17.5); x.closePath(); x.fillStyle="#E2C59B"; x.fill();
+  x.beginPath(); x.moveTo(0,0); x.lineTo(13,-5.4); x.lineTo(13,5.4); x.closePath(); x.fillStyle="#2B2B2B"; x.fill();
+  x.fillStyle="#F2B21B"; x.fillRect(42,-17.5,658,35); x.fillStyle="#D99A0C"; x.fillRect(42,5,658,12.5); x.fillStyle="#F8CB4E"; x.fillRect(42,-17.5,658,9);
+  x.fillStyle="#B9C0C4"; x.fillRect(700,-17.5,22,35); x.fillStyle="#E08A8A"; x.fillRect(722,-17.5,28,35);
+  x.restore();
+  var dx=Math.cos(ang), dy=Math.sin(ang);
+  return {canvas:c, coin:{x:cx,y:cy,r:r}, lines:[
+    {x1:330,y1:650,x2:330+750*dx,y2:650+750*dy},
+    {x1:330+640*dx+17.5*dy,y1:650+640*dy-17.5*dx,x2:330+640*dx-17.5*dy,y2:650+640*dy+17.5*dx}]};
+}
+function boot(){
+  var ex=exampleScene(); src=ex.canvas; lines=ex.lines; sel=-1;
+  var keepRef=ref; ref={country:"India",name:"₹10 (all years)",d:27};
+  coin.x=ex.coin.x; coin.y=ex.coin.y; coin.r=ex.coin.r;
+  var d=null; try{d=detectCoin(); if(d){d=refineCoin(d)||d;}}catch(e){d=null;}
+  window.__exDetect=d;
+  if(d&&Math.abs(d.r-ex.coin.r)/ex.coin.r<0.03&&Math.hypot(d.x-ex.coin.x,d.y-ex.coin.y)<4){coin.x=d.x;coin.y=d.y;coin.r=d.r;}
+  setUnit(unit); layout(); setStep("measure"); renderHistory();
+  setStatus("This is an example with a ₹10 coin and a pencil. Take your own photo to start.");
+  // the example always uses ₹10; your saved coin comes back with your first photo
+  window.__restore=keepRef;
+}
+var _use=usePhoto; usePhoto=function(f){ if(f&&window.__restore){ref=window.__restore;window.__restore=null;} _use(f); };
+window.addEventListener("resize",layout);
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){if(src) draw();});}
+boot();
+
+/* ---------- installable app ---------- */
+$("btnShare").onclick=function(){
+  if(!lastFile) return;
+  navigator.share({files:[lastFile],title:"Coin Ruler measurement"}).catch(function(){});
+};
+var deferredInstall=null;
+function standalone(){return (window.matchMedia&&matchMedia("(display-mode: standalone)").matches)||navigator.standalone===true;}
+window.addEventListener("beforeinstallprompt",function(e){
+  e.preventDefault(); deferredInstall=e;
+  if(!standalone()&&!store.get("cr.noInstall",false)) $("installBar").hidden=false;
+});
+$("btnInstall").onclick=function(){
+  if(!deferredInstall) return;
+  deferredInstall.prompt();
+  deferredInstall.userChoice.finally(function(){deferredInstall=null;$("installBar").hidden=true;});
+};
+$("btnNoInstall").onclick=function(){$("installBar").hidden=true;store.set("cr.noInstall",true);};
+window.addEventListener("appinstalled",function(){$("installBar").hidden=true;toast("Installed. Open Coin Ruler from your home screen.");});
+if("serviceWorker" in navigator && (location.protocol==="https:"||location.hostname==="localhost")){
+  window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){});});
+}
+</script>
+</body>
+</html>
